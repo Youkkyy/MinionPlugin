@@ -33,7 +33,7 @@ public class MinionGUI implements Listener {
     private static final int[] INVENTORY_SLOTS = { 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30,
             31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43 };
     private static final int[] SEED_SLOTS = { 20, 21, 22, 23, 24, 29, 30, 31, 32, 33 };
-    private static final int[] UPGRADE_SLOTS = { 20, 22, 24 };
+    private static final int[] UPGRADE_SLOTS = { 21, 22, 23, 30, 31, 32 };
 
     public MinionGUI(MinionPlugin plugin, FarmerMinion minion, Player player) {
         this.plugin = plugin;
@@ -202,21 +202,49 @@ public class MinionGUI implements Listener {
                                 .build());
     }
 
+    // METHODE fillEmptySlots() SUPPRIMÉE (Code mort)
+
+    private boolean isUpgradeSlot(int slot) {
+        for (int s : UPGRADE_SLOTS) {
+            if (s == slot)
+                return true;
+        }
+        return false;
+    }
+
     private void setupUpgradesPage() {
+        // 1. On place les éléments fixes (Titre + Bouton Retour)
         inventory.setItem(4, new ItemBuilder(Material.ANVIL).setName("§6§lMODULES & AMÉLIORATIONS")
-                .setLore("§7Dépose tes items spéciaux ici.", "§7(Compacteur, etc...)").setGlowing(true).build());
+                .setLore("§7Dépose tes items spéciaux ici.", "§7(Compacteur, etc...)", "", "§7Slots disponibles: §e6")
+                .setGlowing(true).build());
         inventory.setItem(45,
                 new ItemBuilder(Material.ARROW).setName("§e§l← Retour").setLore("§7Page principale").build());
 
-        // ✅ CHARGEMENT : Copie de la mémoire du minion vers le GUI
+        // 2. Remplissage du fond (Sécurité + Visuel Rouge)
+        ItemStack filler = new ItemBuilder(Material.RED_STAINED_GLASS_PANE)
+                .setName("§cEmplacement Verrouillé")
+                .build();
+
+        for (int i = 0; i < inventory.getSize(); i++) {
+            if (isUpgradeSlot(i)) {
+                inventory.setItem(i, null);
+                continue;
+            }
+
+            ItemStack current = inventory.getItem(i);
+            if (current == null || current.getType() == Material.AIR) {
+                inventory.setItem(i, filler);
+            }
+        }
+
+        // 3. Chargement des items réels du minion
         Inventory upgradeInv = minion.getUpgrades();
         ItemStack[] items = upgradeInv.getContents();
 
         for (int i = 0; i < UPGRADE_SLOTS.length; i++) {
+            int slot = UPGRADE_SLOTS[i];
             if (i < items.length && items[i] != null && items[i].getType() != Material.AIR) {
-                inventory.setItem(UPGRADE_SLOTS[i], items[i].clone());
-            } else {
-                inventory.setItem(UPGRADE_SLOTS[i], null);
+                inventory.setItem(slot, items[i].clone());
             }
         }
     }
@@ -250,27 +278,51 @@ public class MinionGUI implements Listener {
                     isUpgradeSlot = true;
 
             if (isUpgradeSlot) {
-                // Si on POSE un item, on vérifie
+                // Validation de l'item posé
                 if (event.getAction().toString().contains("PLACE")
                         || event.getAction() == InventoryAction.SWAP_WITH_CURSOR) {
+
                     ItemStack cursor = event.getCursor();
                     if (cursor != null && cursor.getType() != Material.AIR) {
+
+                        // 1. Vérif validité générale
                         if (!itemManager.isValidUpgrade(cursor)) {
                             event.setCancelled(true);
                             clicker.sendMessage("§c❌ Cet item n'est pas un module valide !");
-                            clicker.playSound(clicker.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                             return;
+                        }
+
+                        // 2. ✅ VÉRIFICATION ANTI-CUMUL POTIONS
+                        if (itemManager.isXPPotion(cursor)) {
+                            // VARIABLE upgradeInv SUPPRIMÉE (Code mort)
+                            boolean hasPotionAlready = false;
+
+                            // On scanne le GUI actuel pour être précis
+                            for (int checkSlot : UPGRADE_SLOTS) {
+                                ItemStack itemInSlot = inventory.getItem(checkSlot);
+                                if (itemInSlot != null && itemManager.isXPPotion(itemInSlot) && checkSlot != slot) {
+                                    hasPotionAlready = true;
+                                    break;
+                                }
+                            }
+
+                            if (hasPotionAlready) {
+                                event.setCancelled(true);
+                                clicker.sendMessage("§c❌ Tu ne peux activer qu'une seule potion d'XP à la fois !");
+                                clicker.playSound(clicker.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                                return;
+                            }
                         }
                     }
                 }
-                return; // On autorise l'action (retrait/dépôt valide)
+                return; // Autorise l'action si tout est OK
             }
 
             // Si on clique ailleurs dans la page 3
             event.setCancelled(true);
             if (slot == 45) { // Retour
-                saveUpgradesToMinion(); // ✅ SAUVEGARDE AVANT DE CHANGER
-                plugin.getDataManager().saveMinion(minion); // ✅ SAUVEGARDE DISQUE
+                saveUpgradesToMinion();
+                plugin.getDataManager().saveMinion(minion);
                 currentPage = 0;
                 setupInventory();
                 clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
@@ -306,8 +358,6 @@ public class MinionGUI implements Listener {
         }
     }
 
-    // ✅ SÉCURISATION DRAG-DROP (Empêche de glisser un item valide dans un slot
-    // invalide)
     @EventHandler
     public void onInventoryDrag(InventoryDragEvent event) {
         if (!event.getInventory().equals(inventory))
@@ -325,7 +375,6 @@ public class MinionGUI implements Listener {
                         return;
                     }
 
-                    // Si c'est un slot upgrade, on vérifie l'item draggé
                     if (!itemManager.isValidUpgrade(event.getOldCursor())) {
                         event.setCancelled(true);
                         return;
@@ -333,7 +382,6 @@ public class MinionGUI implements Listener {
                 }
             }
         } else {
-            // Bloque le drag dans les autres pages sauf Storage
             boolean draggingInStorage = true;
             for (int slot : event.getRawSlots()) {
                 if (slot < 54 && !isInventorySlot(slot))
@@ -349,7 +397,6 @@ public class MinionGUI implements Listener {
         if (!event.getInventory().equals(inventory))
             return;
 
-        // ✅ SAUVEGARDE FINALE
         if (currentPage == 3) {
             saveUpgradesToMinion();
         } else if (currentPage == 0) {
@@ -367,7 +414,6 @@ public class MinionGUI implements Listener {
         for (int i = 0; i < UPGRADE_SLOTS.length; i++) {
             int guiSlot = UPGRADE_SLOTS[i];
             ItemStack item = inventory.getItem(guiSlot);
-            // On transfère du GUI (slots 20, 22, 24) vers la mémoire (slots 0, 1, 2)
             if (item != null && item.getType() != Material.AIR) {
                 minionUpgrades.setItem(i, item.clone());
             }
@@ -429,7 +475,7 @@ public class MinionGUI implements Listener {
             setupInventory();
             clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
         } else if (slot == 52) {
-            saveStorageToMinion(); // Sauvegarde storage avant de passer aux upgrades
+            saveStorageToMinion();
             plugin.getDataManager().saveMinion(minion);
             currentPage = 3;
             setupInventory();

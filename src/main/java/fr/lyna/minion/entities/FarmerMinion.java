@@ -54,7 +54,6 @@ public class FarmerMinion {
         this.plugin = plugin;
         this.tools = new ArrayList<>();
 
-        // ✅ FIX 1.21 : Titres en Component
         this.inventory = Bukkit.createInventory(null, 54, Component.text("Minion Storage"));
         this.upgrades = Bukkit.createInventory(null, 9, Component.text("Minion Upgrades"));
 
@@ -71,6 +70,23 @@ public class FarmerMinion {
         this.tools.add(defaultTool);
 
         updateInfiniteSeeds();
+    }
+
+    // ✅ NOUVELLE MÉTHODE : Récupère le multiplicateur XP actif
+    public int getActiveXPMultiplier() {
+        int multiplier = 1;
+        // On instancie le manager pour lire les items
+        fr.lyna.minion.managers.MinionItemManager itemManager = new fr.lyna.minion.managers.MinionItemManager(plugin);
+
+        for (ItemStack item : upgrades.getContents()) {
+            if (item != null && item.getType() != Material.AIR && itemManager.isXPPotion(item)) {
+                // On récupère la valeur stockée dans la potion (2, 4, 6...)
+                int val = itemManager.getXPMultiplier(item);
+                if (val > multiplier)
+                    multiplier = val;
+            }
+        }
+        return multiplier;
     }
 
     public ItemStack toItemStack() {
@@ -181,7 +197,6 @@ public class FarmerMinion {
             v.setCollidable(false);
             v.setSilent(true);
             v.setInvulnerable(true);
-            // ✅ FIX 1.21 : Utilisation de customName(Component)
             v.customName(LegacyComponentSerializer.legacySection().deserialize(getDisplayName()));
             v.setCustomNameVisible(true);
             v.setProfession(Villager.Profession.FARMER);
@@ -204,7 +219,6 @@ public class FarmerMinion {
             if (v.getPersistentDataContainer().has(key, PersistentDataType.STRING)) {
                 if (uuid.toString().equals(v.getPersistentDataContainer().get(key, PersistentDataType.STRING))) {
                     this.villager = v;
-                    // ✅ FIX 1.21
                     v.customName(LegacyComponentSerializer.legacySection().deserialize(getDisplayName()));
                     v.setCustomNameVisible(true);
                     updateInfiniteSeeds();
@@ -237,7 +251,6 @@ public class FarmerMinion {
 
     public void updateNameTag() {
         if (villager != null && !villager.isDead()) {
-            // ✅ FIX 1.21
             villager.customName(LegacyComponentSerializer.legacySection().deserialize(getDisplayName()));
         }
     }

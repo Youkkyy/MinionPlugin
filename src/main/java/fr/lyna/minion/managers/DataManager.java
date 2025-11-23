@@ -134,13 +134,23 @@ public class DataManager {
         }
         dataConfig.set(path + ".inventory", invList.isEmpty() ? null : invList);
 
+        // ✅ CORRECTION ICI : Sauvegarde précise des slots d'upgrade
         Inventory ups = minion.getUpgrades();
         List<ItemStack> upList = new ArrayList<>();
+        boolean isEmpty = true;
+
+        // On parcourt tout le contenu (taille 9 par défaut dans FarmerMinion)
         for (ItemStack item : ups.getContents()) {
-            if (item != null && item.getType() != Material.AIR)
+            if (item != null && item.getType() != Material.AIR) {
                 upList.add(item.clone());
+                isEmpty = false;
+            } else {
+                // On ajoute explicitement de l'AIR pour conserver l'index (la position)
+                upList.add(new ItemStack(Material.AIR));
+            }
         }
-        dataConfig.set(path + ".upgrades", upList.isEmpty() ? null : upList);
+        // Si la liste ne contient que de l'air, on met null pour nettoyer le fichier
+        dataConfig.set(path + ".upgrades", isEmpty ? null : upList);
 
         if (minion.getLinkedChest() != null)
             dataConfig.set(path + ".linked-chest", serializeLocation(minion.getLinkedChest()));

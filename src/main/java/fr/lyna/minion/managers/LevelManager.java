@@ -2,7 +2,6 @@ package fr.lyna.minion.managers;
 
 import fr.lyna.minion.MinionPlugin;
 import fr.lyna.minion.entities.FarmerMinion;
-// ✅ IMPORTS PAPER 1.21+
 import io.papermc.paper.registry.RegistryAccess;
 import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Material;
@@ -139,13 +138,20 @@ public class LevelManager {
         return getUnlockedSeeds(minion.getLevel()).contains(seedType);
     }
 
+    // ✅ MÉTHODE MISE À JOUR : Application du multiplicateur
     public void addXP(FarmerMinion minion, String action) {
-        int xpGained = levelsConfig.getInt("xp-gains." + action, 1);
-        if (xpGained <= 0)
+        int baseXP = levelsConfig.getInt("xp-gains." + action, 1);
+        if (baseXP <= 0)
             return;
+
+        // Récupération du multiplicateur actif (x2, x4... x12 ou x1 par défaut)
+        int multiplier = minion.getActiveXPMultiplier();
+
+        // Calcul final
+        long finalXP = (long) baseXP * multiplier;
+
         long currentXP = minion.getExperience();
-        long newXP = currentXP + xpGained;
-        minion.setExperience(newXP);
+        minion.setExperience(currentXP + finalXP);
         checkLevelUp(minion);
     }
 
@@ -186,16 +192,12 @@ public class LevelManager {
         return tool;
     }
 
-    // ✅ FIX 1.21 : Utilisation de RegistryAccess (Paper API) au lieu de
-    // Bukkit.getRegistry
     private Enchantment getEnchantmentSafe(String name) {
         if (name == null || name.isEmpty())
             return null;
 
-        // On récupère le registre via l'API Paper
         Registry<Enchantment> registry = RegistryAccess.registryAccess().getRegistry(RegistryKey.ENCHANTMENT);
 
-        // 1. Essai par clé moderne (minecraft:efficiency)
         try {
             NamespacedKey key = NamespacedKey.fromString(name.toLowerCase(Locale.ROOT));
             if (key != null) {
@@ -206,7 +208,6 @@ public class LevelManager {
         } catch (Exception ignored) {
         }
 
-        // 2. Essai par nom legacy (EFFICIENCY)
         try {
             String standardKey = name.toLowerCase(Locale.ROOT);
             NamespacedKey key = NamespacedKey.minecraft(standardKey);
@@ -216,7 +217,6 @@ public class LevelManager {
         } catch (Exception ignored) {
         }
 
-        // 3. Scan du registre pour trouver une correspondance
         for (Enchantment e : registry) {
             if (e.getKey().value().equalsIgnoreCase(name))
                 return e;

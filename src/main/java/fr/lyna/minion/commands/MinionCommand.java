@@ -109,13 +109,22 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
         if (itemType.equals("compactor")) {
             item = itemManager.getCompactor();
         }
+        // ✅ NOUVEAU : Gestion des potions xp1 à xp6
+        else if (itemType.startsWith("xp")) {
+            try {
+                int tier = Integer.parseInt(itemType.substring(2));
+                item = itemManager.getXPPotion(tier);
+            } catch (NumberFormatException e) {
+                sender.sendMessage(plugin.colorize("&cUtilise xp1, xp2, ... xp6"));
+                return;
+            }
+        }
 
         if (item != null) {
             target.getInventory().addItem(item);
-            sender.sendMessage(plugin.colorize("&aItem '" + itemType + "' donné à " + target.getName()));
-            target.sendMessage(plugin.colorize("&aTu as reçu un item spécial pour minion !"));
+            sender.sendMessage(plugin.colorize("&aItem spécial donné à " + target.getName()));
         } else {
-            sender.sendMessage(plugin.colorize("&cItem inconnu. Disponible: compactor"));
+            sender.sendMessage(plugin.colorize("&cItem inconnu. Dispo: compactor, xp1, xp2... xp6"));
         }
     }
 
