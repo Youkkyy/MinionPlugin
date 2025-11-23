@@ -1,0 +1,129 @@
+# Configuration de la progression "Long Terme"
+# Conçu pour durer des semaines/mois de jeu actif.
+
+# Formule XP : Base * (Niveau ^ Exposant) + (Niveau * Lineaire)
+# Niveau 2   = ~1,000 XP
+# Niveau 50  = ~800,000 XP
+# Niveau 100 = ~5,000,000 XP
+xp-formula:
+  base: 300
+  exponent: 2.4
+  linear: 500
+
+# Gains d'XP très faibles pour éviter l'inflation
+# Avec une récolte toutes les 3s = ~1200 XP/heure max
+xp-gains:
+  harvest-crop: 2
+  plant-seed: 1
+  deposit-chest: 1
+
+default-tool:
+  material: WOODEN_HOE
+  enchantments:
+    UNBREAKING: 1
+
+# --- PALIER DE RÉCOMPENSES ---
+# Le système applique la valeur du niveau atteint.
+# Si un niveau n'est pas listé, il prend la valeur du niveau inférieur précédent.
+
+cooldowns:
+  1: 120   # 6.0s - Très lent au début
+  10: 100  # 5.0s
+  20: 80   # 4.0s
+  30: 70   # 3.5s
+  40: 60   # 3.0s
+  50: 50   # 2.5s
+  60: 40   # 2.0s
+  70: 35   # 1.75s
+  80: 30   # 1.5s
+  90: 25   # 1.25s
+  100: 20  # 1.0s - Rapide à la toute fin
+
+seed-unlocks:
+  1:
+    - WHEAT_SEEDS
+  5:
+    - CARROT
+  15:
+    - POTATO
+  30:
+    - BEETROOT_SEEDS
+  45:
+    - MELON_SEEDS
+    - PUMPKIN_SEEDS
+  60:
+    - SWEET_BERRIES
+  75:
+    - COCOA_BEANS
+  90:
+    - NETHER_WART
+
+level-bonuses:
+  # Rayon Horizontal (X/Z)
+  # Niveau 50 = 8 blocs (donc 16x16 = tout le chunk horizontalement)
+  detection-radius:
+    1: 4
+    10: 5
+    25: 6
+    50: 8
+    100: 12
+
+  # Rayon Vertical (Y)
+  # Niveau 1  : +/- 3 blocs (Rez-de-chaussée)
+  # Niveau 25 : +/- 15 blocs (Petite maison)
+  # Niveau 50 : +/- 40 blocs (Tour)
+  # Niveau 100: +/- 320 blocs (Du ciel à la bedrock)
+  vertical-range:
+    1: 3
+    10: 6
+    20: 10
+    30: 15
+    40: 25
+    50: 40
+    60: 60
+    70: 90
+    80: 150
+    90: 250
+    100: 384  # Tout le monde Minecraft
+
+  # Slots d'inventaire (Max 54)
+  # Progression constante : +1 slot tous les ~2 niveaux
+  inventory-size:
+    1: 5     # Très petit au début, force à lier un coffre
+    10: 9    # 1 ligne
+    20: 14
+    30: 18   # 2 lignes
+    40: 23
+    50: 27   # 3 lignes (Coffre simple)
+    60: 32
+    70: 36   # 4 lignes
+    80: 41
+    90: 45   # 5 lignes
+    100: 54  # 6 lignes (Double coffre)
+
+  # Chance de multiplier les récoltes (%)
+  # 50 = 50% de chance d'avoir x2
+  # 100 = 100% de chance d'avoir x2
+  # 250 = 100% de chance d'avoir x3 + 50% de chance d'avoir x4
+  harvest-multiplier-chance:
+    1: 0.0
+    5: 5.0
+    10: 10.0
+    20: 25.0
+    30: 40.0
+    40: 50.0    # x1.5 en moyenne
+    50: 75.0
+    60: 100.0   # x2 garanti
+    70: 150.0   # x2.5 en moyenne
+    80: 200.0   # x3 garanti
+    90: 250.0
+    100: 300.0  # x4 garanti (Fortune ultime)
+
+messages:
+  level-up: |
+    &8&m--------------------------------
+    &6&l⚡ MINION LEVEL UP !
+    &7Ton minion est passé niveau &e{level}
+    &7Efficacité augmentée !
+    &8&m--------------------------------
+  seed-unlocked: "&a&l✨ NOUVEAU ! &r&7Le minion peut maintenant planter : &e{seed}"

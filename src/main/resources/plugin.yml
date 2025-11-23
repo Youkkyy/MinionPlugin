@@ -1,0 +1,51 @@
+name: MinionPlugin
+version: '2.0.0'
+main: fr.lyna.minion.MinionPlugin
+api-version: '1.21'
+author: Lyna
+description: Plugin de minions fermiers avec système de progression et niveaux
+depend: [FastAsyncWorldEdit]
+softdepend: [WorldEdit]
+
+commands:
+  minion:
+    description: Commande principale des minions
+    usage: /minion <give|reload|list|info|stats|prestige>
+    permission: minion.use
+    aliases: [m]
+
+  miniontest:
+    description: Teste si FAWE et les schematics fonctionnent
+    usage: /miniontest
+    permission: minion.admin
+
+  miniondebug:
+    description: Debug un minion pour voir pourquoi il ne fait rien
+    usage: /miniondebug [scan]
+    permission: minion.admin
+    aliases: [mdebug, mdiag]
+
+permissions:
+  minion.use:
+    description: Permet d'utiliser les commandes de base
+    default: true
+
+  minion.give:
+    description: Permet de se donner un minion
+    default: op
+
+  minion.admin:
+    description: Accès administrateur complet
+    default: op
+
+  minion.place:
+    description: Permet de placer un minion
+    default: true
+
+  minion.bypass.limit:
+    description: Bypass la limite de minions
+    default: op
+
+  minion.prestige:
+    description: Permet d'utiliser le système de prestige
+    default: true

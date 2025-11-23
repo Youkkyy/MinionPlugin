@@ -1,0 +1,95 @@
+# =====================================================
+#           CONFIGURATION MINION - V2.0
+# =====================================================
+
+# --- RÉGLAGES GÉNÉRAUX ---
+settings:
+  # Limite de minions par joueur (Bypass avec permission: minion.bypass.limit)
+  # Mettre -1 pour illimité.
+  max-minions-per-player: 5
+
+  # Fréquence de calcul de l'IA (en ticks). 20 ticks = 1 seconde.
+  # Augmenter cette valeur réduit le lag mais rend les minions moins réactifs.
+  ai-tick-delay: 20
+
+  # Sauvegarder automatiquement les données toutes les X secondes.
+  auto-save-interval: 300
+
+  # Si true, le minion drop son inventaire au sol quand on le récupère.
+  # Si false, les items sont perdus ou doivent être récupérés manuellement avant.
+  drop-items-on-retrieve: true
+
+# --- APPARENCE & COMPORTEMENT DU MINION ---
+minion:
+  # Vitesse de déplacement du minion (Blocs par tick).
+  # 0.15 est une marche fluide. Trop haut = téléportation.
+  movement-speed: 0.15
+
+  # Format du nom au-dessus de la tête du minion.
+  # Placeholders : {level}, {prestige}, {stars}
+  name-format: "&6&l{stars}{prestige} &e{level} &7Fermier"
+
+  # Symbole utilisé pour les étoiles de prestige
+  prestige-symbol: "★"
+
+# --- CONFIGURATION DU FARMING ---
+farming:
+  # Nom du fichier schematic dans le dossier /plugins/MinionPlugin/schematics/
+  # Ne pas mettre l'extension .schem ici.
+  schematic-name: "mcfarm"
+
+  # Hauteur à laquelle le minion peut interagir (en plus de son niveau).
+  # Sécurité pour éviter qu'il casse des blocs trop loin.
+  max-interaction-distance: 50
+
+# --- LIAISON COFFRE (TÉLÉPATHIE) ---
+linking:
+  # Distance maximum pour lier un coffre (en blocs)
+  max-link-distance: 50
+
+  # Temps laissé au joueur pour cliquer sur un coffre après la commande (secondes)
+  link-timeout: 30
+
+# --- EFFETS VISUELS & SONORES ---
+visuals:
+  # Activer les particules ?
+  particles: true
+  # Activer les sons ?
+  sounds: true
+
+  # Types de particules (Noms Bukkit : https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Particle.html)
+  effects:
+    harvest: "HAPPY_VILLAGER"   # Quand il récolte
+    plant: "VILLAGER_HAPPY"     # Quand il plante
+    deposit: "VILLAGER_HAPPY"   # Quand il transfère au coffre (rayon)
+    level-up: "TOTEM_OF_UNDYING" # Quand il monte de niveau
+
+  # Types de sons (Noms Bukkit : https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Sound.html)
+  audio:
+    harvest: "BLOCK_CROP_BREAK"
+    till: "ITEM_HOE_TILL"
+    deposit: "BLOCK_AMETHYST_BLOCK_RESONATE"
+    level-up: "ENTITY_PLAYER_LEVELUP"
+    retrieve: "ENTITY_ITEM_PICKUP"
+    error: "ENTITY_VILLAGER_NO"
+    success: "ENTITY_VILLAGER_YES"
+
+# --- MESSAGES DU CHAT ---
+messages:
+  prefix: "&8[&6Minion&8]&r "
+  no-permission: "&c❌ Tu n'as pas la permission !"
+  limit-reached: "&c❌ Tu as atteint ta limite de {limit} minions !"
+
+  minion-received: "&a✅ Tu as reçu &e{amount} &aminion(s) fermier(s) !"
+  minion-placed: "&a✅ Minion placé avec succès !"
+  minion-retrieved: "&a✅ Minion récupéré dans ton inventaire !"
+
+  structure-pasting: "&e🏗️ Construction de la ferme en cours..."
+  structure-error: "&c❌ Erreur lors de la génération de la structure."
+  no-farmland: "&c❌ Aucune terre cultivable trouvée ici."
+
+  link-start: "&e⚡ Clique-droit sur un coffre pour le lier (30s) !"
+  link-success: "&a✅ Coffre lié avec succès !"
+  link-too-far: "&c❌ Ce coffre est trop loin du minion !"
+  link-bad-block: "&c❌ Ce n'est pas un coffre valide !"
+  link-timeout: "&cTemps écoulé ! Liaison annulée."
