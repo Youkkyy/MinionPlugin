@@ -16,6 +16,7 @@ import org.bukkit.entity.Villager;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.NamespacedKey;
+import org.bukkit.util.RayTraceResult;
 
 import java.util.*;
 
@@ -76,7 +77,6 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
 
         for (int i = 0; i < amount; i++) {
             UUID minionUUID = UUID.randomUUID();
-            // On crée une instance temporaire pour générer l'item avec les NBT par défaut
             FarmerMinion minion = new FarmerMinion(minionUUID, player.getUniqueId(), player.getLocation(), plugin);
             player.getInventory().addItem(minion.toItemStack());
         }
@@ -108,14 +108,22 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
 
         if (itemType.equals("compactor")) {
             item = itemManager.getCompactor();
-        }
-        // ✅ NOUVEAU : Gestion des potions xp1 à xp6
-        else if (itemType.startsWith("xp")) {
+        } else if (itemType.equals("void")) {
+            item = itemManager.getVoidModule();
+        } else if (itemType.startsWith("xp")) {
             try {
                 int tier = Integer.parseInt(itemType.substring(2));
                 item = itemManager.getXPPotion(tier);
             } catch (NumberFormatException e) {
-                sender.sendMessage(plugin.colorize("&cUtilise xp1, xp2, ... xp6"));
+                sender.sendMessage(plugin.colorize("&cUtilise xp1, xp2... xp6"));
+                return;
+            }
+        } else if (itemType.startsWith("harvest")) {
+            try {
+                int tier = Integer.parseInt(itemType.substring(7));
+                item = itemManager.getHarvestPotion(tier);
+            } catch (NumberFormatException e) {
+                sender.sendMessage(plugin.colorize("&cUtilise harvest1, harvest2... harvest6"));
                 return;
             }
         }
@@ -124,7 +132,7 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
             target.getInventory().addItem(item);
             sender.sendMessage(plugin.colorize("&aItem spécial donné à " + target.getName()));
         } else {
-            sender.sendMessage(plugin.colorize("&cItem inconnu. Dispo: compactor, xp1, xp2... xp6"));
+            sender.sendMessage(plugin.colorize("&cItem inconnu. Dispo: compactor, void, xp1-6, harvest1-6"));
         }
     }
 
@@ -224,7 +232,6 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
     private void handleInfo(CommandSender sender) {
         sender.sendMessage(plugin.colorize("&8&m                                    "));
         sender.sendMessage(plugin.colorize("&6&lMINION PLUGIN INFO"));
-        // ✅ FIX 1.21: Utilisation de getPluginMeta() au lieu de getDescription()
         sender.sendMessage(plugin.colorize("&7Version: &e" + plugin.getPluginMeta().getVersion()));
 
         String author = "Inconnu";
@@ -353,8 +360,18 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
     }
 
     private FarmerMinion getTargetMinion(Player player) {
-        Entity target = player.getTargetEntity(10);
-        if (target instanceof Villager villager) {
+        // ✅ FIX: Utilisation de RayTrace qui filtre spécifiquement les Villagers
+        // Cela permet d'ignorer les TextDisplays (Panneaux de stats) qui bloquent la
+        // vue
+        RayTraceResult result = player.getWorld().rayTraceEntities(
+                player.getEyeLocation(),
+                player.getEyeLocation().getDirection(),
+                10,
+                0.5, // Rayon de détection légèrement large
+                entity -> entity instanceof Villager // On ignore tout ce qui n'est pas un villageois
+        );
+
+        if (result != null && result.getHitEntity() instanceof Villager villager) {
             NamespacedKey key = new NamespacedKey(plugin, "minion_uuid");
             if (villager.getPersistentDataContainer().has(key, PersistentDataType.STRING)) {
                 String uuidStr = villager.getPersistentDataContainer().get(key, PersistentDataType.STRING);
@@ -419,6 +436,11 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
                 completions.addAll(Arrays.asList("1", "10", "50", "100"));
             } else if (args[0].equalsIgnoreCase("giveitem") && sender.hasPermission("minion.admin")) {
                 completions.add("compactor");
+                completions.add("void");
+                for (int i = 1; i <= 6; i++)
+                    completions.add("xp" + i);
+                for (int i = 1; i <= 6; i++)
+                    completions.add("harvest" + i);
             }
         }
 

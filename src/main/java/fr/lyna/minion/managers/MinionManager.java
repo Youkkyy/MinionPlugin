@@ -28,11 +28,6 @@ public class MinionManager implements Listener {
         this.minionUuidKey = new NamespacedKey(plugin, "minion_uuid");
     }
 
-    /**
-     * 🔥 NETTOYAGE TOTAL (Clean Slate Protocol)
-     * Supprime tous les villagers minions physiques des mondes.
-     * À exécuter au démarrage avant de charger les données.
-     */
     public void killAllMinionEntities() {
         plugin.getLogger().info("🧹 Nettoyage préventif des entités minions...");
         int count = 0;
@@ -54,16 +49,17 @@ public class MinionManager implements Listener {
      */
     public void despawnAllMinions() {
         for (FarmerMinion minion : minions.values()) {
-            minion.remove(); // Retire le villager du monde
+            // ✅ CORRECTION : On utilise despawn() au lieu de remove()
+            // Cela supprime le villageois mais GARDE le TextDisplay (Leaderboard)
+            minion.despawn();
         }
         minions.clear();
     }
 
     public void addMinion(FarmerMinion minion) {
-        if (minions.containsKey(minion.getUuid())) return;
+        if (minions.containsKey(minion.getUuid()))
+            return;
         minions.put(minion.getUuid(), minion);
-
-        // On force le spawn propre puisqu'on a tout nettoyé avant
         minion.spawn();
     }
 
@@ -98,7 +94,7 @@ public class MinionManager implements Listener {
     public void removeMinion(UUID minionUUID) {
         FarmerMinion minion = minions.get(minionUUID);
         if (minion != null) {
-            minion.remove();
+            minion.remove(); // Ici on veut tout supprimer
             minions.remove(minionUUID);
             plugin.getDataManager().deleteMinion(minionUUID);
         }
@@ -107,15 +103,21 @@ public class MinionManager implements Listener {
     public boolean isChunkOccupied(Chunk chunk) {
         for (FarmerMinion minion : minions.values()) {
             Chunk mChunk = minion.getSpawnLocation().getChunk();
-            if (mChunk.getWorld().equals(chunk.getWorld()) && mChunk.getX() == chunk.getX() && mChunk.getZ() == chunk.getZ()) {
+            if (mChunk.getWorld().equals(chunk.getWorld()) && mChunk.getX() == chunk.getX()
+                    && mChunk.getZ() == chunk.getZ()) {
                 return true;
             }
         }
         return false;
     }
 
-    public FarmerMinion getMinion(UUID uuid) { return minions.get(uuid); }
-    public Collection<FarmerMinion> getAllMinions() { return minions.values(); }
+    public FarmerMinion getMinion(UUID uuid) {
+        return minions.get(uuid);
+    }
+
+    public Collection<FarmerMinion> getAllMinions() {
+        return minions.values();
+    }
 
     public int getPlayerMinionCount(UUID playerUUID) {
         return (int) minions.values().stream().filter(m -> m.getOwnerUUID().equals(playerUUID)).count();
@@ -125,8 +127,10 @@ public class MinionManager implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
-        if (!(event.getRightClicked() instanceof Villager villager)) return;
-        if (!villager.getPersistentDataContainer().has(minionUuidKey, PersistentDataType.STRING)) return;
+        if (!(event.getRightClicked() instanceof Villager villager))
+            return;
+        if (!villager.getPersistentDataContainer().has(minionUuidKey, PersistentDataType.STRING))
+            return;
 
         event.setCancelled(true);
         Player player = event.getPlayer();
@@ -136,7 +140,6 @@ public class MinionManager implements Listener {
         FarmerMinion minion = getMinion(uuid);
 
         if (minion == null) {
-            // C'est un fantôme qui a survécu au nettoyage
             villager.remove();
             player.sendMessage(plugin.colorize("&cCe minion est un fantôme, il a été supprimé."));
             return;
@@ -156,7 +159,8 @@ public class MinionManager implements Listener {
 
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerInteractAtEntity(PlayerInteractAtEntityEvent event) {
-        if (event.getRightClicked() instanceof Villager v && v.getPersistentDataContainer().has(minionUuidKey, PersistentDataType.STRING)) {
+        if (event.getRightClicked() instanceof Villager v
+                && v.getPersistentDataContainer().has(minionUuidKey, PersistentDataType.STRING)) {
             event.setCancelled(true);
         }
     }
@@ -165,7 +169,8 @@ public class MinionManager implements Listener {
         if (plugin.getConfig().getBoolean("settings.drop-items-on-break", true)) {
             Location loc = minion.getLocation();
             for (ItemStack item : minion.getInventory()) {
-                if (item != null && item.getType() != Material.AIR) loc.getWorld().dropItemNaturally(loc, item);
+                if (item != null && item.getType() != Material.AIR)
+                    loc.getWorld().dropItemNaturally(loc, item);
             }
         }
         player.getInventory().addItem(minion.toItemStack());

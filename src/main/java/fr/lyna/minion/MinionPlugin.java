@@ -3,6 +3,7 @@ package fr.lyna.minion;
 import fr.lyna.minion.commands.MinionCommand;
 import fr.lyna.minion.commands.MinionDebugCommand;
 import fr.lyna.minion.commands.MinionTestCommand;
+import fr.lyna.minion.listeners.LeaderboardListener;
 import fr.lyna.minion.listeners.MinionDamageListener;
 import fr.lyna.minion.listeners.MinionPlaceListener;
 import fr.lyna.minion.managers.DataManager;
@@ -26,20 +27,17 @@ public class MinionPlugin extends JavaPlugin {
         setupFiles();
 
         this.levelManager = new LevelManager(this);
-        // 1. On initialise le manager
         this.minionManager = new MinionManager(this);
 
-        // 2. 🔥 CRUCIAL : On tue tous les villagers minions qui trainent dans le monde
-        // Cela élimine les doublons statiques avant même de charger les vrais.
+        // Clean Slate Protocol
         this.minionManager.killAllMinionEntities();
 
         this.dataManager = new DataManager(this);
-        // 3. On charge les données et on fait respawn les minions proprement
         dataManager.loadAllMinions();
 
         int taskDelay = getConfig().getInt("settings.minion-tick-delay", 5);
         this.farmingTask = new FarmingTask(this);
-        this.farmingTask.runTaskTimer(this, 20L, taskDelay); // Délai initial de 1s pour laisser le monde charger
+        this.farmingTask.runTaskTimer(this, 20L, taskDelay);
 
         registerCommands();
         registerListeners();
@@ -49,20 +47,22 @@ public class MinionPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (farmingTask != null) farmingTask.cancel();
+        if (farmingTask != null)
+            farmingTask.cancel();
 
-        // 4. On sauvegarde tout
-        if (dataManager != null) dataManager.saveAllMinions();
+        if (dataManager != null)
+            dataManager.saveAllMinions();
 
-        // 5. On retire les entités du monde pour laisser une map propre
-        if (minionManager != null) minionManager.despawnAllMinions();
+        if (minionManager != null)
+            minionManager.despawnAllMinions();
 
         getLogger().info("❌ MinionPlugin désactivé");
     }
 
     private void setupFiles() {
         java.io.File schematicFolder = new java.io.File(getDataFolder(), "schematics");
-        if (!schematicFolder.exists()) schematicFolder.mkdirs();
+        if (!schematicFolder.exists())
+            schematicFolder.mkdirs();
         try {
             saveResource("schematics/mcfarm.schem", false);
         } catch (Exception ignored) {
@@ -83,6 +83,8 @@ public class MinionPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(minionManager, this);
         getServer().getPluginManager().registerEvents(new MinionPlaceListener(this), this);
         getServer().getPluginManager().registerEvents(new MinionDamageListener(this), this);
+        // ✅ Enregistrement du listener leaderboard
+        getServer().getPluginManager().registerEvents(new LeaderboardListener(this), this);
     }
 
     public static MinionPlugin getInstance() {
@@ -102,7 +104,8 @@ public class MinionPlugin extends JavaPlugin {
     }
 
     public String getMessage(String path) {
-        return colorize(getConfig().getString("messages.prefix", "&8[&6Minion&8] ") + getConfig().getString("messages." + path, path));
+        return colorize(getConfig().getString("messages.prefix", "&8[&6Minion&8] ")
+                + getConfig().getString("messages." + path, path));
     }
 
     public String colorize(String message) {

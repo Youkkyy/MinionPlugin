@@ -10,18 +10,23 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.util.UUID;
+
 public class MinionItemManager {
 
     private final MinionPlugin plugin;
-    // Clés NBT
+
+    // Clés NBT pour identifier les items spéciaux
     public static final String KEY_UPGRADE_TYPE = "minion_upgrade_type";
     public static final String KEY_XP_MULTIPLIER = "minion_xp_multiplier";
+    public static final String KEY_HARVEST_MULTIPLIER = "minion_harvest_multiplier";
+    public static final String KEY_LEADERBOARD_PLACER = "minion_leaderboard_placer";
 
     public MinionItemManager(MinionPlugin plugin) {
         this.plugin = plugin;
     }
 
-    // --- COMPACTEUR (Existant) ---
+    // --- COMPACTEUR ---
     public ItemStack getCompactor() {
         ItemStack item = new ItemBuilder(Material.PISTON)
                 .setName("§6§lCompacteur Automatique")
@@ -34,11 +39,74 @@ public class MinionItemManager {
         return checkUpgradeType(item, "COMPACTOR");
     }
 
-    // --- NOUVEAU : POTIONS D'XP ---
+    // --- MODULE DE NÉANT (VOID) ---
+    public ItemStack getVoidModule() {
+        ItemStack item = new ItemBuilder(Material.MAGMA_CREAM)
+                .setName("§c§lModule de Néant")
+                .setLore(
+                        "§7Détruit automatiquement les items",
+                        "§7indésirables (Graines, déchets...).",
+                        "",
+                        "§bCliquable dans le menu pour",
+                        "§bconfigurer le filtre.",
+                        "",
+                        "§eModule d'amélioration")
+                .setGlowing(true).build();
+        return tagItem(item, "VOID_MODULE");
+    }
 
+    public boolean isVoidModule(ItemStack item) {
+        return checkUpgradeType(item, "VOID_MODULE");
+    }
+
+    // --- ✅ ITEM DE PLACEMENT LEADERBOARD ---
     /**
-     * Crée une potion d'XP selon le niveau (1 à 6)
+     * Crée l'item qui permet au joueur de placer le panneau de stats.
+     * L'UUID du minion est stocké dans l'item pour lier le panneau au bon minion.
      */
+    public ItemStack getLeaderboardPlacer(UUID minionUUID) {
+        ItemStack item = new ItemBuilder(Material.OAK_SIGN)
+                .setName("§e§lPanneau de Statistiques")
+                .setLore(
+                        "§7Affiche les stats de ton minion",
+                        "§7en temps réel dans le monde.",
+                        "",
+                        "§e⚡ Clique Droit sur un bloc",
+                        "§epour placer le panneau !",
+                        "",
+                        "§8(Uniquement dans le même monde)")
+                .setGlowing(true)
+                .build();
+
+        // On stocke l'UUID du minion cible dans les données de l'item
+        org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+        meta.getPersistentDataContainer().set(new NamespacedKey(plugin, KEY_LEADERBOARD_PLACER),
+                PersistentDataType.STRING, minionUUID.toString());
+        item.setItemMeta(meta);
+
+        return item;
+    }
+
+    public boolean isLeaderboardPlacer(ItemStack item) {
+        if (item == null || !item.hasItemMeta())
+            return false;
+        return item.getItemMeta().getPersistentDataContainer().has(new NamespacedKey(plugin, KEY_LEADERBOARD_PLACER),
+                PersistentDataType.STRING);
+    }
+
+    public UUID getMinionUUIDFromPlacer(ItemStack item) {
+        if (!isLeaderboardPlacer(item))
+            return null;
+        try {
+            String str = item.getItemMeta().getPersistentDataContainer()
+                    .get(new NamespacedKey(plugin, KEY_LEADERBOARD_PLACER), PersistentDataType.STRING);
+            return UUID.fromString(str);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // --- POTIONS D'XP ---
     public ItemStack getXPPotion(int tier) {
         if (tier < 1)
             tier = 1;
@@ -73,29 +141,19 @@ public class MinionItemManager {
                         "",
                         "§c⚠ Une seule potion à la fois !",
                         "§eModule d'amélioration")
-                // ✅ CORRECTION : HIDE_ADDITIONAL_TOOLTIP est le seul flag valide en 1.21 pour
-                // les potions
-                // Même s'il est "deprecated" (avertissement), il est obligatoire car
-                // HIDE_POTION_EFFECTS n'existe plus.
                 .addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP, ItemFlag.HIDE_ATTRIBUTES)
                 .build();
 
-        // Ajout de la couleur de potion
         if (item.getItemMeta() instanceof PotionMeta pm) {
             pm.setColor(color);
             item.setItemMeta(pm);
         }
 
-        // Ajout des tags NBT (Type + Valeur du multiplicateur)
         ItemStack tagged = tagItem(item, "XP_BOOST");
-
         org.bukkit.inventory.meta.ItemMeta meta = tagged.getItemMeta();
-        meta.getPersistentDataContainer().set(
-                new NamespacedKey(plugin, KEY_XP_MULTIPLIER),
-                PersistentDataType.INTEGER,
+        meta.getPersistentDataContainer().set(new NamespacedKey(plugin, KEY_XP_MULTIPLIER), PersistentDataType.INTEGER,
                 tier);
         tagged.setItemMeta(meta);
-
         return tagged;
     }
 
@@ -106,14 +164,74 @@ public class MinionItemManager {
     public int getXPMultiplier(ItemStack item) {
         if (!isXPPotion(item))
             return 0;
-        return item.getItemMeta().getPersistentDataContainer().getOrDefault(
-                new NamespacedKey(plugin, KEY_XP_MULTIPLIER),
-                PersistentDataType.INTEGER,
-                1);
+        return item.getItemMeta().getPersistentDataContainer()
+                .getOrDefault(new NamespacedKey(plugin, KEY_XP_MULTIPLIER), PersistentDataType.INTEGER, 1);
+    }
+
+    // --- POTIONS DE RÉCOLTE ---
+    public ItemStack getHarvestPotion(int tier) {
+        if (tier < 1)
+            tier = 1;
+        if (tier > 6)
+            tier = 6;
+        int multiplier = tier * 2;
+
+        String name = switch (tier) {
+            case 1 -> "§eFertilisant Basique §7(x2)";
+            case 2 -> "§aEngrais Concentré §7(x4)";
+            case 3 -> "§bSérum d'Abondance §7(x6)";
+            case 4 -> "§dExtrait de Croissance §7(x8)";
+            case 5 -> "§6Elixir de Moisson §7(x10)";
+            case 6 -> "§c§lEssence de Gaia §7(x12)";
+            default -> "§fPotion de Récolte";
+        };
+
+        Color color = switch (tier) {
+            case 1 -> Color.YELLOW;
+            case 2 -> Color.TEAL;
+            case 3 -> Color.BLUE;
+            case 4 -> Color.FUCHSIA;
+            case 5 -> Color.MAROON;
+            case 6 -> Color.BLACK;
+            default -> Color.YELLOW;
+        };
+
+        ItemStack item = new ItemBuilder(Material.POTION)
+                .setName(name)
+                .setLore(
+                        "§7Multiplie les récoltes du minion.",
+                        "§7Bonus: §eRécolte x" + multiplier,
+                        "",
+                        "§c⚠ Une seule potion à la fois !",
+                        "§eModule d'amélioration")
+                .addItemFlags(ItemFlag.HIDE_ADDITIONAL_TOOLTIP, ItemFlag.HIDE_ATTRIBUTES)
+                .build();
+
+        if (item.getItemMeta() instanceof PotionMeta pm) {
+            pm.setColor(color);
+            item.setItemMeta(pm);
+        }
+
+        ItemStack tagged = tagItem(item, "HARVEST_BOOST");
+        org.bukkit.inventory.meta.ItemMeta meta = tagged.getItemMeta();
+        meta.getPersistentDataContainer().set(new NamespacedKey(plugin, KEY_HARVEST_MULTIPLIER),
+                PersistentDataType.INTEGER, multiplier);
+        tagged.setItemMeta(meta);
+        return tagged;
+    }
+
+    public boolean isHarvestPotion(ItemStack item) {
+        return checkUpgradeType(item, "HARVEST_BOOST");
+    }
+
+    public int getHarvestMultiplier(ItemStack item) {
+        if (!isHarvestPotion(item))
+            return 0;
+        return item.getItemMeta().getPersistentDataContainer()
+                .getOrDefault(new NamespacedKey(plugin, KEY_HARVEST_MULTIPLIER), PersistentDataType.INTEGER, 1);
     }
 
     // --- UTILITAIRES ---
-
     public boolean isValidUpgrade(ItemStack item) {
         if (item == null || !item.hasItemMeta())
             return false;

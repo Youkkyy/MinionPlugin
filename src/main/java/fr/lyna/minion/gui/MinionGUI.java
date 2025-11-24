@@ -17,6 +17,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class MinionGUI implements Listener {
@@ -34,6 +35,21 @@ public class MinionGUI implements Listener {
             31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43 };
     private static final int[] SEED_SLOTS = { 20, 21, 22, 23, 24, 29, 30, 31, 32, 33 };
     private static final int[] UPGRADE_SLOTS = { 21, 22, 23, 30, 31, 32 };
+
+    // Liste des items configurables pour le Void
+    private static final Material[] COMMON_JUNK = {
+            Material.WHEAT_SEEDS, Material.BEETROOT_SEEDS, Material.MELON_SEEDS, Material.PUMPKIN_SEEDS,
+            Material.POISONOUS_POTATO,
+            Material.WHEAT, Material.CARROT, Material.POTATO, Material.BEETROOT,
+            Material.MELON_SLICE, Material.PUMPKIN, Material.SWEET_BERRIES,
+            Material.COCOA_BEANS, Material.NETHER_WART, Material.SUGAR_CANE, Material.CACTUS,
+            Material.DIRT, Material.COBBLESTONE, Material.ROTTEN_FLESH, Material.BONE
+    };
+    private static final int[] VOID_SLOTS = {
+            10, 11, 12, 13, 14, 15, 16,
+            19, 20, 21, 22, 23, 24, 25,
+            28, 29, 30, 31, 32, 33, 34
+    };
 
     public MinionGUI(MinionPlugin plugin, FarmerMinion minion, Player player) {
         this.plugin = plugin;
@@ -58,6 +74,7 @@ public class MinionGUI implements Listener {
             case 1 -> setupStatsPage();
             case 2 -> setupSeedsSelectionPage();
             case 3 -> setupUpgradesPage();
+            case 4 -> setupVoidConfigPage();
         }
     }
 
@@ -83,8 +100,24 @@ public class MinionGUI implements Listener {
                                         : "§c⚠ Coffre lié mais manquant !", "§eClique pour changer" }
                                 : new String[] { "§c✗ Aucun coffre lié", "§eClique pour lier un coffre" })
                         .build());
+
+        // ✅ SLOT 46 : LEADERBOARD MANAGER
+        boolean hasLeaderboard = (minion.getLeaderboardUuid() != null
+                && Bukkit.getEntity(minion.getLeaderboardUuid()) != null);
+        if (hasLeaderboard) {
+            inventory.setItem(46, new ItemBuilder(Material.BARRIER)
+                    .setName("§c§lSupprimer l'Affichage")
+                    .setLore("§7Retire le panneau de stats", "§7flottant du monde.", "", "§cClique pour supprimer")
+                    .build());
+        } else {
+            inventory.setItem(46, new ItemBuilder(Material.OAK_SIGN)
+                    .setName("§e§lPlacer Affichage Stats")
+                    .setLore("§7Obtiens un item pour placer", "§7les stats flottantes.", "", "§eClique pour obtenir")
+                    .build());
+        }
+
         inventory.setItem(52, new ItemBuilder(Material.NETHER_STAR).setName("§e§lAméliorations & Modules")
-                .setLore("§7Ajoute des items spéciaux", "§7(Compacteur, Auto-Sell...)", "", "§eClique pour ouvrir")
+                .setLore("§7Ajoute des items spéciaux", "§7(Compacteur, Void, Potions...)", "", "§eClique pour ouvrir")
                 .build());
 
         int invSize = plugin.getLevelManager().getInventorySize(minion.getLevel());
@@ -130,10 +163,36 @@ public class MinionGUI implements Listener {
                 new ItemBuilder(Material.ARROW).setName("§e§l← Retour").setLore("§7Page principale").build());
 
         int level = minion.getLevel();
+
+        int multiplier = minion.getActiveXPMultiplier();
+        int baseHarvest = plugin.getLevelManager().getBaseXP("harvest-crop");
+        int basePlant = plugin.getLevelManager().getBaseXP("plant-seed");
+        int baseDeposit = plugin.getLevelManager().getBaseXP("deposit-chest");
+
+        List<String> xpLore = new ArrayList<>();
+        xpLore.add("§7Niveau actuel: §e" + level + "§7/100");
+        xpLore.add("§7XP: §a" + minion.getExperience() + " §7/ §a" + plugin.getLevelManager().getXPRequired(level + 1));
+        xpLore.add("");
+        xpLore.add("§e§lGAINS D'EXPÉRIENCE :");
+
+        if (multiplier > 1) {
+            xpLore.add("§d⚡ Multiplicateur Actif : x" + multiplier);
+        } else {
+            xpLore.add("§7(Aucun multiplicateur actif)");
+        }
+
+        xpLore.add("§7• Récolte : §b" + (baseHarvest * multiplier) + " XP"
+                + (multiplier > 1 ? " §8(Base: " + baseHarvest + ")" : ""));
+        xpLore.add("§7• Plantation : §b" + (basePlant * multiplier) + " XP"
+                + (multiplier > 1 ? " §8(Base: " + basePlant + ")" : ""));
+        xpLore.add("§7• Dépôt Coffre : §b" + (baseDeposit * multiplier) + " XP"
+                + (multiplier > 1 ? " §8(Base: " + baseDeposit + ")" : ""));
+
         inventory.setItem(11, new ItemBuilder(Material.EXPERIENCE_BOTTLE)
-                .setName("§e§lProgression").setLore("§7Niveau actuel: §e" + level + "§7/100", "§7XP: §a"
-                        + minion.getExperience() + " §7/ §a" + plugin.getLevelManager().getXPRequired(level + 1))
+                .setName("§e§lProgression")
+                .setLore(xpLore)
                 .build());
+
         double cooldownSeconds = plugin.getLevelManager().getCooldown(level) / 20.0;
         inventory.setItem(13,
                 new ItemBuilder(Material.CLOCK).setName("§e§lVitesse de Travail")
@@ -202,8 +261,6 @@ public class MinionGUI implements Listener {
                                 .build());
     }
 
-    // METHODE fillEmptySlots() SUPPRIMÉE (Code mort)
-
     private boolean isUpgradeSlot(int slot) {
         for (int s : UPGRADE_SLOTS) {
             if (s == slot)
@@ -213,14 +270,13 @@ public class MinionGUI implements Listener {
     }
 
     private void setupUpgradesPage() {
-        // 1. On place les éléments fixes (Titre + Bouton Retour)
         inventory.setItem(4, new ItemBuilder(Material.ANVIL).setName("§6§lMODULES & AMÉLIORATIONS")
-                .setLore("§7Dépose tes items spéciaux ici.", "§7(Compacteur, etc...)", "", "§7Slots disponibles: §e6")
+                .setLore("§7Dépose tes items spéciaux ici.", "§7(Compacteur, Void, Potions...)", "",
+                        "§7Slots disponibles: §e6")
                 .setGlowing(true).build());
         inventory.setItem(45,
                 new ItemBuilder(Material.ARROW).setName("§e§l← Retour").setLore("§7Page principale").build());
 
-        // 2. Remplissage du fond (Sécurité + Visuel Rouge)
         ItemStack filler = new ItemBuilder(Material.RED_STAINED_GLASS_PANE)
                 .setName("§cEmplacement Verrouillé")
                 .build();
@@ -237,15 +293,50 @@ public class MinionGUI implements Listener {
             }
         }
 
-        // 3. Chargement des items réels du minion
         Inventory upgradeInv = minion.getUpgrades();
         ItemStack[] items = upgradeInv.getContents();
 
         for (int i = 0; i < UPGRADE_SLOTS.length; i++) {
             int slot = UPGRADE_SLOTS[i];
             if (i < items.length && items[i] != null && items[i].getType() != Material.AIR) {
-                inventory.setItem(slot, items[i].clone());
+                ItemStack displayItem = items[i].clone();
+                if (itemManager.isVoidModule(displayItem)) {
+                    ItemBuilder b = new ItemBuilder(displayItem);
+                    List<String> lore = new ArrayList<>(
+                            displayItem.getItemMeta().getLore() != null ? displayItem.getItemMeta().getLore()
+                                    : new ArrayList<>());
+                    lore.add("");
+                    lore.add("§b➤ Clique droit pour CONFIGURER");
+                    b.setLore(lore);
+                    inventory.setItem(slot, b.build());
+                } else {
+                    inventory.setItem(slot, displayItem);
+                }
             }
+        }
+    }
+
+    private void setupVoidConfigPage() {
+        inventory.setItem(4, new ItemBuilder(Material.MAGMA_CREAM).setName("§c§lCONFIGURATION DU NÉANT")
+                .setLore("§7Sélectionne les items à détruire.", "", "§eClique pour Activer/Désactiver")
+                .setGlowing(true).build());
+        inventory.setItem(45,
+                new ItemBuilder(Material.ARROW).setName("§e§l← Retour").setLore("§7Page Améliorations").build());
+
+        for (int i = 0; i < COMMON_JUNK.length && i < VOID_SLOTS.length; i++) {
+            Material mat = COMMON_JUNK[i];
+            boolean isVoided = minion.isVoidItem(mat);
+
+            ItemStack item = new ItemBuilder(mat)
+                    .setName((isVoided ? "§c§lSUPPRIMÉ" : "§a§lCONSERVÉ") + " §7: " + getSeedDisplayName(mat))
+                    .setLore("",
+                            isVoided ? "§cCet item sera détruit !" : "§aCet item sera gardé.",
+                            "",
+                            "§eClique pour changer")
+                    .setGlowing(isVoided)
+                    .build();
+
+            inventory.setItem(VOID_SLOTS[i], item);
         }
     }
 
@@ -256,7 +347,6 @@ public class MinionGUI implements Listener {
         Player clicker = (Player) event.getWhoClicked();
         int slot = event.getRawSlot();
 
-        // Clic dans l'inventaire du joueur (Bas)
         if (slot >= 54) {
             if (currentPage == 3 && event.isShiftClick()) {
                 ItemStack item = event.getCurrentItem();
@@ -265,39 +355,67 @@ public class MinionGUI implements Listener {
                     clicker.sendMessage("§c❌ Cet item n'est pas un module valide !");
                 }
             } else if (currentPage != 3 && event.isShiftClick()) {
-                event.setCancelled(true); // Bloque shift-click vers les autres pages
+                event.setCancelled(true);
             }
             return;
         }
 
-        // --- PAGE 3 : UPGRADES ---
+        if (currentPage == 4) {
+            event.setCancelled(true);
+            if (slot == 45) {
+                currentPage = 3;
+                setupInventory();
+                clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
+                return;
+            }
+            for (int i = 0; i < VOID_SLOTS.length; i++) {
+                if (slot == VOID_SLOTS[i] && i < COMMON_JUNK.length) {
+                    Material mat = COMMON_JUNK[i];
+                    minion.toggleVoidItem(mat);
+                    plugin.getDataManager().saveMinion(minion);
+                    setupInventory();
+                    clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 0.5f, 1f);
+                    return;
+                }
+            }
+            return;
+        }
+
         if (currentPage == 3) {
             boolean isUpgradeSlot = false;
-            for (int i : UPGRADE_SLOTS)
-                if (slot == i)
+            for (int i : UPGRADE_SLOTS) {
+                if (slot == UPGRADE_SLOTS[i]) {
                     isUpgradeSlot = true;
+                    break;
+                }
+            }
 
             if (isUpgradeSlot) {
-                // Validation de l'item posé
+                if (event.getClick() == ClickType.RIGHT) {
+                    ItemStack item = inventory.getItem(slot);
+                    if (item != null && itemManager.isVoidModule(item)) {
+                        event.setCancelled(true);
+                        currentPage = 4;
+                        setupInventory();
+                        clicker.playSound(clicker.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
+                        return;
+                    }
+                }
+
                 if (event.getAction().toString().contains("PLACE")
                         || event.getAction() == InventoryAction.SWAP_WITH_CURSOR) {
 
                     ItemStack cursor = event.getCursor();
                     if (cursor != null && cursor.getType() != Material.AIR) {
 
-                        // 1. Vérif validité générale
                         if (!itemManager.isValidUpgrade(cursor)) {
                             event.setCancelled(true);
                             clicker.sendMessage("§c❌ Cet item n'est pas un module valide !");
                             return;
                         }
 
-                        // 2. ✅ VÉRIFICATION ANTI-CUMUL POTIONS
                         if (itemManager.isXPPotion(cursor)) {
-                            // VARIABLE upgradeInv SUPPRIMÉE (Code mort)
                             boolean hasPotionAlready = false;
-
-                            // On scanne le GUI actuel pour être précis
                             for (int checkSlot : UPGRADE_SLOTS) {
                                 ItemStack itemInSlot = inventory.getItem(checkSlot);
                                 if (itemInSlot != null && itemManager.isXPPotion(itemInSlot) && checkSlot != slot) {
@@ -305,7 +423,6 @@ public class MinionGUI implements Listener {
                                     break;
                                 }
                             }
-
                             if (hasPotionAlready) {
                                 event.setCancelled(true);
                                 clicker.sendMessage("§c❌ Tu ne peux activer qu'une seule potion d'XP à la fois !");
@@ -313,14 +430,32 @@ public class MinionGUI implements Listener {
                                 return;
                             }
                         }
+
+                        if (itemManager.isHarvestPotion(cursor)) {
+                            boolean hasPotionAlready = false;
+                            for (int checkSlot : UPGRADE_SLOTS) {
+                                ItemStack itemInSlot = inventory.getItem(checkSlot);
+                                if (itemInSlot != null && itemManager.isHarvestPotion(itemInSlot)
+                                        && checkSlot != slot) {
+                                    hasPotionAlready = true;
+                                    break;
+                                }
+                            }
+                            if (hasPotionAlready) {
+                                event.setCancelled(true);
+                                clicker.sendMessage(
+                                        "§c❌ Tu ne peux activer qu'une seule potion de récolte à la fois !");
+                                clicker.playSound(clicker.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                                return;
+                            }
+                        }
                     }
                 }
-                return; // Autorise l'action si tout est OK
+                return;
             }
 
-            // Si on clique ailleurs dans la page 3
             event.setCancelled(true);
-            if (slot == 45) { // Retour
+            if (slot == 45) {
                 saveUpgradesToMinion();
                 plugin.getDataManager().saveMinion(minion);
                 currentPage = 0;
@@ -330,7 +465,6 @@ public class MinionGUI implements Listener {
             return;
         }
 
-        // --- AUTRES PAGES ---
         if (currentPage == 2) {
             event.setCancelled(true);
             if (event.getClick() == ClickType.LEFT)
@@ -364,7 +498,7 @@ public class MinionGUI implements Listener {
             return;
         if (currentPage == 3) {
             for (int slot : event.getRawSlots()) {
-                if (slot < 54) { // Si drag dans le GUI
+                if (slot < 54) {
                     boolean isUpgradeSlot = false;
                     for (int uSlot : UPGRADE_SLOTS)
                         if (slot == uSlot)
@@ -415,7 +549,11 @@ public class MinionGUI implements Listener {
             int guiSlot = UPGRADE_SLOTS[i];
             ItemStack item = inventory.getItem(guiSlot);
             if (item != null && item.getType() != Material.AIR) {
-                minionUpgrades.setItem(i, item.clone());
+                ItemStack cleanItem = item.clone();
+                if (itemManager.isVoidModule(cleanItem)) {
+                    cleanItem = itemManager.getVoidModule();
+                }
+                minionUpgrades.setItem(i, cleanItem);
             }
         }
     }
@@ -432,7 +570,6 @@ public class MinionGUI implements Listener {
         }
     }
 
-    // --- UTILITAIRES ---
     private boolean isStatsSlot(int slot) {
         if (currentPage != 1)
             return false;
@@ -493,6 +630,25 @@ public class MinionGUI implements Listener {
                 if (i != null && i.getType() != Material.AIR)
                     clicker.getWorld().dropItemNaturally(loc, i);
         }
+        // ✅ GESTION DU BOUTON LEADERBOARD (Slot 46)
+        else if (slot == 46) {
+            boolean hasLeaderboard = (minion.getLeaderboardUuid() != null
+                    && Bukkit.getEntity(minion.getLeaderboardUuid()) != null);
+            if (hasLeaderboard) {
+                minion.removeLeaderboard();
+                plugin.getDataManager().saveMinion(minion);
+                clicker.sendMessage(plugin.colorize("&cPanneau de statistiques retiré."));
+                setupInventory(); // Rafraîchir le bouton
+                clicker.playSound(clicker.getLocation(), Sound.ENTITY_ITEM_BREAK, 1f, 1f);
+            } else {
+                // On donne l'item pour placer
+                ItemStack placer = itemManager.getLeaderboardPlacer(minion.getUuid());
+                clicker.getInventory().addItem(placer);
+                clicker.sendMessage(plugin.colorize("&aTu as reçu le panneau de stats ! Pose-le avec clique droit."));
+                clicker.closeInventory();
+                clicker.playSound(clicker.getLocation(), Sound.ENTITY_ITEM_PICKUP, 1f, 1f);
+            }
+        }
     }
 
     private void handleStatsPageClick(int slot, Player clicker) {
@@ -548,15 +704,27 @@ public class MinionGUI implements Listener {
 
     private String getSeedDisplayName(Material seed) {
         return switch (seed) {
-            case WHEAT_SEEDS -> "Blé";
-            case CARROT -> "Carottes";
-            case POTATO -> "Pommes de terre";
-            case BEETROOT_SEEDS -> "Betteraves";
+            case WHEAT_SEEDS -> "Graines de Blé";
+            case BEETROOT_SEEDS -> "Graines de Betteraves";
+            case MELON_SEEDS -> "Graines de Melon";
+            case PUMPKIN_SEEDS -> "Graines de Citrouille";
             case NETHER_WART -> "Verrues du Nether";
-            case MELON_SEEDS -> "Melons";
-            case PUMPKIN_SEEDS -> "Citrouilles";
-            case SWEET_BERRIES -> "Baies sucrées";
-            case COCOA_BEANS -> "Cacao";
+            case SWEET_BERRIES -> "Baies Sucrées";
+            case COCOA_BEANS -> "Fèves de Cacao";
+            case SUGAR_CANE -> "Canne à Sucre";
+            case CACTUS -> "Cactus";
+            case WHEAT -> "Blé";
+            case CARROT -> "Carottes";
+            case POTATO -> "Pommes de Terre";
+            case BEETROOT -> "Betteraves";
+            case MELON_SLICE -> "Tranche de Melon";
+            case PUMPKIN -> "Citrouille";
+            case POISONOUS_POTATO -> "P. de Terre Empoisonnée";
+            case ROTTEN_FLESH -> "Chair Putréfiée";
+            case BONE -> "Os";
+            case ARROW -> "Flèche";
+            case DIRT -> "Terre";
+            case COBBLESTONE -> "Pierre";
             default -> formatMaterialName(seed);
         };
     }
@@ -583,6 +751,8 @@ public class MinionGUI implements Listener {
         String n = PlainTextComponentSerializer.plainText().serialize(c);
         return n.contains("Progression") || n.contains("Vitesse") || n.contains("Zone") || n.contains("Capacité")
                 || n.contains("Fortune") || n.contains("Graines") || n.contains("NIVEAU") || n.contains("STATISTIQUES")
-                || n.contains("SÉLECTION") || n.contains("Informations") || n.contains("MODULES");
+                || n.contains("SÉLECTION") || n.contains("Informations") || n.contains("MODULES")
+                || n.contains("CONFIGURATION")
+                || n.contains("Affichage Stats"); // Ajouté pour éviter que le joueur prenne l'item du GUI
     }
 }

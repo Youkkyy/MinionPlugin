@@ -14,7 +14,11 @@ import org.bukkit.inventory.ItemStack;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class DataManager {
@@ -80,6 +84,36 @@ public class DataManager {
         minion.setExperience(dataConfig.getLong(path + ".experience", 0));
         minion.setPrestige(dataConfig.getInt(path + ".prestige", 0));
 
+        // ✅ CHARGEMENT DATE CRÉATION
+        long savedCreation = dataConfig.getLong(path + ".creation-time", 0);
+        if (savedCreation > 0) {
+            minion.setCreationTime(savedCreation);
+        }
+
+        String lbUuid = dataConfig.getString(path + ".leaderboard-uuid");
+        if (lbUuid != null) {
+            try {
+                minion.setLeaderboardUuid(UUID.fromString(lbUuid));
+            } catch (Exception ignored) {
+            }
+        }
+
+        if (dataConfig.contains(path + ".harvest-stats")) {
+            ConfigurationSection statsSection = dataConfig.getConfigurationSection(path + ".harvest-stats");
+            Map<Material, Long> stats = new HashMap<>();
+            if (statsSection != null) {
+                for (String matName : statsSection.getKeys(false)) {
+                    try {
+                        Material mat = Material.valueOf(matName);
+                        long count = statsSection.getLong(matName);
+                        stats.put(mat, count);
+                    } catch (IllegalArgumentException ignored) {
+                    }
+                }
+            }
+            minion.setHarvestStats(stats);
+        }
+
         List<?> inventoryList = dataConfig.getList(path + ".inventory");
         if (inventoryList != null) {
             for (Object obj : inventoryList)
@@ -106,7 +140,7 @@ public class DataManager {
 
         List<String> selectedSeedsList = dataConfig.getStringList(path + ".selected-seeds");
         if (!selectedSeedsList.isEmpty()) {
-            java.util.Set<Material> seeds = new java.util.HashSet<>();
+            Set<Material> seeds = new HashSet<>();
             for (String seedName : selectedSeedsList) {
                 try {
                     seeds.add(Material.valueOf(seedName));
@@ -115,6 +149,19 @@ public class DataManager {
             }
             minion.setSelectedSeeds(seeds);
         }
+
+        List<String> voidList = dataConfig.getStringList(path + ".void-filter");
+        if (voidList != null && !voidList.isEmpty()) {
+            Set<Material> voids = new HashSet<>();
+            for (String s : voidList) {
+                try {
+                    voids.add(Material.valueOf(s));
+                } catch (Exception ignored) {
+                }
+            }
+            minion.setVoidFilter(voids);
+        }
+
         return minion;
     }
 
@@ -126,6 +173,22 @@ public class DataManager {
         dataConfig.set(path + ".experience", minion.getExperience());
         dataConfig.set(path + ".prestige", minion.getPrestige());
 
+        // ✅ SAUVEGARDE DE LA DATE
+        dataConfig.set(path + ".creation-time", minion.getCreationTime());
+
+        if (minion.getLeaderboardUuid() != null) {
+            dataConfig.set(path + ".leaderboard-uuid", minion.getLeaderboardUuid().toString());
+        } else {
+            dataConfig.set(path + ".leaderboard-uuid", null);
+        }
+
+        dataConfig.set(path + ".harvest-stats", null);
+        if (!minion.getHarvestStats().isEmpty()) {
+            for (Map.Entry<Material, Long> entry : minion.getHarvestStats().entrySet()) {
+                dataConfig.set(path + ".harvest-stats." + entry.getKey().name(), entry.getValue());
+            }
+        }
+
         Inventory inv = minion.getInventory();
         List<ItemStack> invList = new ArrayList<>();
         for (ItemStack item : inv.getContents()) {
@@ -134,22 +197,18 @@ public class DataManager {
         }
         dataConfig.set(path + ".inventory", invList.isEmpty() ? null : invList);
 
-        // ✅ CORRECTION ICI : Sauvegarde précise des slots d'upgrade
         Inventory ups = minion.getUpgrades();
         List<ItemStack> upList = new ArrayList<>();
         boolean isEmpty = true;
 
-        // On parcourt tout le contenu (taille 9 par défaut dans FarmerMinion)
         for (ItemStack item : ups.getContents()) {
             if (item != null && item.getType() != Material.AIR) {
                 upList.add(item.clone());
                 isEmpty = false;
             } else {
-                // On ajoute explicitement de l'AIR pour conserver l'index (la position)
                 upList.add(new ItemStack(Material.AIR));
             }
         }
-        // Si la liste ne contient que de l'air, on met null pour nettoyer le fichier
         dataConfig.set(path + ".upgrades", isEmpty ? null : upList);
 
         if (minion.getLinkedChest() != null)
@@ -161,6 +220,12 @@ public class DataManager {
         for (Material seed : minion.getSelectedSeeds())
             selectedSeeds.add(seed.name());
         dataConfig.set(path + ".selected-seeds", selectedSeeds.isEmpty() ? null : selectedSeeds);
+
+        List<String> voidList = new ArrayList<>();
+        for (Material m : minion.getVoidFilter()) {
+            voidList.add(m.name());
+        }
+        dataConfig.set(path + ".void-filter", voidList.isEmpty() ? null : voidList);
 
         saveConfig();
     }

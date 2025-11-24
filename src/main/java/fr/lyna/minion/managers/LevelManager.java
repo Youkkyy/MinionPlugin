@@ -103,6 +103,11 @@ public class LevelManager {
         return xpRequirements.getOrDefault(level, Long.MAX_VALUE);
     }
 
+    // ✅ NOUVELLE MÉTHODE : Permet au GUI de récupérer la base XP
+    public int getBaseXP(String action) {
+        return levelsConfig.getInt("xp-gains." + action, 0);
+    }
+
     public int getCooldown(int level) {
         return cooldownsByLevel.getOrDefault(level, 60);
     }
@@ -138,9 +143,8 @@ public class LevelManager {
         return getUnlockedSeeds(minion.getLevel()).contains(seedType);
     }
 
-    // ✅ MÉTHODE MISE À JOUR : Application du multiplicateur
     public void addXP(FarmerMinion minion, String action) {
-        int baseXP = levelsConfig.getInt("xp-gains." + action, 1);
+        int baseXP = getBaseXP(action);
         if (baseXP <= 0)
             return;
 

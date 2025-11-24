@@ -25,12 +25,10 @@ public class FarmingTask extends BukkitRunnable {
     private List<FarmerMinion> cachedMinionList = new ArrayList<>();
     private int currentTick = 0;
 
-    // Config
     private double movementSpeed;
     private boolean useParticles;
     private boolean useSounds;
 
-    // Cache Sounds/Particles
     private Sound cachedSoundHarvest;
     private Sound cachedSoundTill;
     private Sound cachedSoundDeposit;
@@ -157,20 +155,14 @@ public class FarmingTask extends BukkitRunnable {
         }
     }
 
-    // ✅ LOGIQUE PRINCIPALE MISE À JOUR
     private void processMinionAI(FarmerMinion minion) {
-        // 1. TENTATIVE DE COMPACTAGE (Prioritaire)
-        // On essaie de libérer de la place immédiatement pour éviter le blocage.
         tryCompacting(minion);
 
-        // 2. GESTION INVENTAIRE PLEIN
         if (isInventoryFull(minion)) {
-            // Si on a un coffre, on vide tout ce qu'on peut
             if (minion.getLinkedChest() != null) {
                 performTelepathicDeposit(minion);
                 return;
             }
-            // Sinon, on arrête de travailler (le minion est plein et coincé)
             return;
         }
 
@@ -184,7 +176,6 @@ public class FarmingTask extends BukkitRunnable {
         }
     }
 
-    // ✅ COMPACTEUR TRANSACTIONNEL ET INTELLIGENT
     private void tryCompacting(FarmerMinion minion) {
         boolean hasCompactor = false;
         for (ItemStack item : minion.getUpgrades().getContents()) {
@@ -213,50 +204,31 @@ public class FarmingTask extends BukkitRunnable {
                     int blocksToCreate = amount / 9;
                     int remainder = amount % 9;
 
-                    // --- TRANSACTION SÉCURISÉE ---
-                    // 1. On retire virtuellement les ressources pour tester
                     inv.setItem(i, null);
 
                     ItemStack resultBlock = new ItemStack(blockType, blocksToCreate);
                     HashMap<Integer, ItemStack> leftovers = inv.addItem(resultBlock);
 
                     if (leftovers.isEmpty()) {
-                        // ✅ SUCCÈS : Tout est rentré.
-                        // On remet le surplus éventuel (ex: 1 blé restant)
                         if (remainder > 0) {
                             ItemStack remainderStack = new ItemStack(item.getType(), remainder);
-                            // On ajoute le reste de manière sûre (ça devrait rentrer dans le slot i qu'on
-                            // vient de vider ou ailleurs)
                             HashMap<Integer, ItemStack> remLeft = inv.addItem(remainderStack);
                             if (!remLeft.isEmpty()) {
-                                // Cas très rare : slot i pris par le bloc, et pas d'autre place.
-                                // On ne drop pas, on garde dans l'inventaire en forçant si possible ou on
-                                // annule.
-                                // Simplification : Le slot i est vide au début, donc le reste y va souvent.
                             }
                         }
                     } else {
-                        // ❌ ÉCHEC : Pas de place pour le bloc.
-                        // 1. ROLLBACK : On remet l'item original comme si rien n'avait changé
                         item.setAmount(amount);
                         inv.setItem(i, item);
 
-                        // On nettoie les items partiellement ajoutés par addItem (si addItem en a mis
-                        // un
-                        // peu)
-                        // On calcule ce qui a été ajouté : total voulu - ce qui reste
                         int addedAmount = blocksToCreate - leftovers.get(0).getAmount();
                         if (addedAmount > 0) {
                             inv.removeItem(new ItemStack(blockType, addedAmount));
                         }
 
-                        // 2. NETTOYAGE D'URGENCE
-                        // Si on a un coffre, on essaie de virer tout ce qui gêne (Carottes, Blocs déjà
-                        // faits...)
                         if (!hasCleanedSpace && minion.getLinkedChest() != null) {
                             depositNonCompactables(minion, recipes.keySet());
                             hasCleanedSpace = true;
-                            i--; // On reste sur ce slot pour réessayer immédiatement
+                            i--;
                         }
                     }
                 }
@@ -264,18 +236,14 @@ public class FarmingTask extends BukkitRunnable {
         }
     }
 
-    // Vide tout sauf les ressources qui doivent être compactées (ex: garde le Blé,
-    // vire les Carottes et le Foin)
     private void depositNonCompactables(FarmerMinion minion, Set<Material> compactableMaterials) {
         depositToChest(minion, item -> !compactableMaterials.contains(item.getType()));
     }
 
-    // Dépot standard (tout ce qui est valide)
     private void performTelepathicDeposit(FarmerMinion minion) {
         depositToChest(minion, item -> true);
     }
 
-    // ✅ MÉTHODE GÉNÉRIQUE DE TRANSFERT COFFRE
     private void depositToChest(FarmerMinion minion, Predicate<ItemStack> filter) {
         Location chestLoc = minion.getLinkedChest();
         if (chestLoc == null)
@@ -297,25 +265,16 @@ public class FarmingTask extends BukkitRunnable {
             ItemStack item = minionInv.getItem(i);
 
             if (item != null && item.getType() != Material.AIR && isFarmingItem(item.getType()) && filter.test(item)) {
-                // Tente d'ajouter au coffre
                 HashMap<Integer, ItemStack> leftover = chestInv.addItem(item);
 
                 if (leftover.isEmpty()) {
-                    // Tout est parti
                     minionInv.setItem(i, null);
                     transferred = true;
                 } else {
-                    // Une partie est partie
                     item.setAmount(leftover.get(0).getAmount());
                     minionInv.setItem(i, item);
-                    // Si la quantité a diminué, c'est qu'on a transféré un truc
                     if (leftover.get(0).getAmount() < leftover.get(0).getMaxStackSize()
-                            && leftover.get(0).getAmount() != item.getMaxStackSize()) { // Check approximatif
-                        // Plus précis : on compare avec la quantité avant (mais on l'a pas stockée).
-                        // On assume true si leftover n'est pas full stack bloqué.
-                        // Simplification : Si leftover < item initial, transferred = true.
-                        // Comme on a écrasé item, on ne peut plus comparer. On marque true si
-                        // le coffre n'était pas full au départ.
+                            && leftover.get(0).getAmount() != item.getMaxStackSize()) {
                         transferred = true;
                     }
                 }
@@ -356,8 +315,6 @@ public class FarmingTask extends BukkitRunnable {
         }
         return true;
     }
-
-    // --- HANDLERS ---
 
     private void handleIdleState(FarmerMinion minion) {
         if (!minion.canPerformAction())
@@ -411,7 +368,6 @@ public class FarmingTask extends BukkitRunnable {
         }
     }
 
-    // ✅ RÉCOLTE SÉCURISÉE (Zéro Déchet)
     private void handleHarvesting(FarmerMinion minion) {
         Location target = minion.getTargetLocation();
         if (target == null) {
@@ -424,25 +380,43 @@ public class FarmingTask extends BukkitRunnable {
             return;
         }
 
-        // 1. Calcul anticipé des drops
         Collection<ItemStack> drops = block.getDrops(minion.getTools().get(0));
+
         double multiplierChance = plugin.getLevelManager().getHarvestMultiplierChance(minion.getLevel());
-        int guaranteed = 1 + (int) (multiplierChance / 100);
+        int levelGuaranteed = 1 + (int) (multiplierChance / 100);
         double remaining = multiplierChance % 100;
 
+        int potionMultiplier = minion.getActiveHarvestMultiplier();
+        boolean hasVoid = minion.hasVoidModule();
+
         List<ItemStack> finalDrops = new ArrayList<>();
+
         for (ItemStack d : drops) {
-            if (isSeedItemToVoid(d.getType()))
+            // Logique Void
+            if (hasVoid && minion.isVoidItem(d.getType())) {
+                playVoidEffect(minion);
+
+                // On enregistre quand même la stat "virtuelle" de ce qui a été cassé
+                int rawAmount = d.getAmount() * levelGuaranteed * potionMultiplier;
+                // ✅ MISE A JOUR STATS DÉTAILLÉES
+                minion.addHarvestStat(d.getType(), rawAmount);
                 continue;
-            int amount = d.getAmount() * guaranteed;
+            }
+
+            int amount = d.getAmount() * levelGuaranteed;
             if (Math.random() * 100 < remaining)
                 amount += d.getAmount();
+
+            amount *= potionMultiplier;
+
+            // ✅ MISE A JOUR STATS DÉTAILLÉES
+            minion.addHarvestStat(d.getType(), amount);
+
             ItemStack n = d.clone();
             n.setAmount(amount);
             finalDrops.add(n);
         }
 
-        // 2. SIMULATION : A-t-on la place ?
         Inventory fakeInv = Bukkit.createInventory(null, minion.getInventory().getSize());
         fakeInv.setContents(minion.getInventory().getContents());
 
@@ -456,17 +430,11 @@ public class FarmingTask extends BukkitRunnable {
         }
 
         if (!canFitAll) {
-            // ❌ L'inventaire est TROP plein. On ne casse pas, on attend le prochain tour.
-            // Cela donnera une chance au compacteur ou au dépôt coffre de libérer de la
-            // place.
             return;
         }
 
-        // 3. ACTION RÉELLE
         block.setType(Material.AIR);
         for (ItemStack drop : finalDrops) {
-            // On ajoute en utilisant une méthode sûre (pas de drop au sol)
-            // Comme on a simulé, addItem devrait fonctionner sans restes.
             minion.getInventory().addItem(drop);
         }
 
@@ -476,12 +444,12 @@ public class FarmingTask extends BukkitRunnable {
         minion.markActionPerformed();
     }
 
-    private boolean isSeedItemToVoid(Material mat) {
-        return mat == Material.WHEAT_SEEDS || mat == Material.BEETROOT_SEEDS || mat == Material.MELON_SEEDS
-                || mat == Material.PUMPKIN_SEEDS;
+    private void playVoidEffect(FarmerMinion minion) {
+        if (minion.getLocation().getWorld() != null && Math.random() < 0.2) {
+            minion.getLocation().getWorld().spawnParticle(Particle.SMOKE, minion.getLocation().add(0, 1, 0), 2, 0.2,
+                    0.2, 0.2, 0);
+        }
     }
-
-    // MÉTHODE addToMinionInventory SUPPRIMÉE (Code mort)
 
     private void handleMovingToPlant(FarmerMinion minion) {
         Location target = minion.getTargetLocation();
