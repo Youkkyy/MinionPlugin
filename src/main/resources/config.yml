@@ -1,70 +1,161 @@
 # =====================================================
-#           CONFIGURATION MINION - V2.0
+#           CONFIGURATION MINION - V3.0
 # =====================================================
 
-# --- RÉGLAGES GÉNÉRAUX ---
 settings:
-  # Limite de minions par joueur (Bypass avec permission: minion.bypass.limit)
-  # Mettre -1 pour illimité.
   max-minions-per-player: 5
-
-  # Fréquence de calcul de l'IA (en ticks). 20 ticks = 1 seconde.
-  # Augmenter cette valeur réduit le lag mais rend les minions moins réactifs.
   ai-tick-delay: 20
-
-  # Sauvegarder automatiquement les données toutes les X secondes.
   auto-save-interval: 300
-
-  # Si true, le minion drop son inventaire au sol quand on le récupère.
-  # Si false, les items sont perdus ou doivent être récupérés manuellement avant.
   drop-items-on-retrieve: true
 
-# --- APPARENCE & COMPORTEMENT DU MINION ---
 minion:
-  # Vitesse de déplacement du minion (Blocs par tick).
-  # 0.15 est une marche fluide. Trop haut = téléportation.
   movement-speed: 0.15
-
-  # Format du nom au-dessus de la tête du minion.
-  # Placeholders : {level}, {prestige}, {stars}
   name-format: "&6&l{stars}{prestige} &e{level} &7Fermier"
-
-  # Symbole utilisé pour les étoiles de prestige
   prestige-symbol: "★"
 
-# --- CONFIGURATION DU FARMING ---
 farming:
-  # Nom du fichier schematic dans le dossier /plugins/MinionPlugin/schematics/
-  # Ne pas mettre l'extension .schem ici.
   schematic-name: "mcfarm"
-
-  # Hauteur à laquelle le minion peut interagir (en plus de son niveau).
-  # Sécurité pour éviter qu'il casse des blocs trop loin.
   max-interaction-distance: 50
 
-# --- LIAISON COFFRE (TÉLÉPATHIE) ---
 linking:
-  # Distance maximum pour lier un coffre (en blocs)
   max-link-distance: 50
-
-  # Temps laissé au joueur pour cliquer sur un coffre après la commande (secondes)
   link-timeout: 30
 
-# --- EFFETS VISUELS & SONORES ---
+# --- SYSTÈME DE CARBURANT ---
+fuel:
+  enabled: true
+  # Le minion a-t-il besoin de carburant pour travailler ?
+  # Si false, le carburant est désactivé.
+  
+  # Durée en HEURES pour chaque tier de carburant
+  durations:
+    1: 2
+    2: 10
+    3: 20
+    4: 30
+    5: 38
+    6: 48
+
+# --- REVENTE AUTOMATIQUE ---
+auto-sell:
+  tiers:
+    1: 25
+    2: 50
+    3: 75
+  prices:
+    WHEAT: 0.10
+    HAY_BLOCK: 1.00
+    CARROT: 0.15
+    POTATO: 0.15
+    POISONOUS_POTATO: 0.01
+    BEETROOT: 0.12
+    MELON_SLICE: 0.05
+    MELON: 0.50
+    PUMPKIN: 0.30
+    SWEET_BERRIES: 0.10
+    COCOA_BEANS: 0.25
+    SUGAR_CANE: 0.15
+    CACTUS: 0.20
+    NETHER_WART: 0.40
+    NETHER_WART_BLOCK: 3.80
+    COAL: 0.30
+    COAL_BLOCK: 3.00
+    IRON_INGOT: 1.50
+    IRON_BLOCK: 14.00
+    GOLD_INGOT: 2.50
+    GOLD_BLOCK: 23.00
+    REDSTONE: 0.10
+    REDSTONE_BLOCK: 1.00
+    LAPIS_LAZULI: 0.15
+    LAPIS_BLOCK: 1.50
+    DIAMOND: 8.00
+    DIAMOND_BLOCK: 75.00
+    EMERALD: 6.00
+    EMERALD_BLOCK: 55.00
+
+# --- CONFIGURATION DES ITEMS SPÉCIAUX ---
+items:
+  compactor:
+    material: PISTON
+    name: "&6&lCompacteur Automatique"
+    lore:
+      - "&7Transforme automatiquement les"
+      - "&7ressources en blocs."
+      - ""
+      - "&eModule d'amélioration"
+
+  void-module:
+    material: MAGMA_CREAM
+    name: "&c&lModule de Néant"
+    lore:
+      - "&7Détruit automatiquement les items"
+      - "&7indésirables (Graines, déchets...)."
+      - ""
+      - "&bCliquable dans le menu pour"
+      - "&bconfigurer le filtre."
+      - ""
+      - "&eModule d'amélioration"
+
+  # Config des modules Auto-Sell
+  auto-sell:
+    material:
+      1: IRON_NUGGET
+      2: GOLD_NUGGET
+      3: EMERALD
+    name: "&a&lModule de Vente (T{tier})"
+    lore:
+      - "&7Vend automatiquement les récoltes."
+      - "&7Prix: &e{percent}% &7du prix de base."
+      - ""
+      - "&7Avec compacteur : Vend les blocs."
+      - ""
+      - "&eModule d'amélioration"
+
+  # Config des potions XP
+  xp-potion:
+    name: "&d&lPotion de Savoir (x{multiplier})"
+    lore:
+      - "&7Augmente le gain d'XP du minion."
+      - "&7Bonus: &eXP x{multiplier}"
+      - ""
+      - "&c⚠ Une seule potion à la fois !"
+      - "&eModule d'amélioration"
+
+  # Config des potions Fortune
+  harvest-potion:
+    name: "&6&lElixir de Moisson (x{multiplier})"
+    lore:
+      - "&7Multiplie les récoltes du minion."
+      - "&7Bonus: &eRécolte x{multiplier}"
+      - ""
+      - "&c⚠ Une seule potion à la fois !"
+      - "&eModule d'amélioration"
+
+  # Config du Carburant
+  fuel:
+    material: CHARCOAL
+    name: "&e&lCarburant Minion ({hours}h)"
+    lore:
+      - "&7Requis pour faire fonctionner le minion."
+      - "&7Durée: &b+{hours} Heures"
+      - ""
+      - "&bGlisse cet item dans le menu"
+      - "&bpour recharger le minion !"
+      - ""
+      - "&8(Consommable)"
+
+# --- VISUELS & SONS ---
 visuals:
-  # Activer les particules ?
   particles: true
-  # Activer les sons ?
   sounds: true
-
-  # Types de particules (Noms Bukkit : https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Particle.html)
   effects:
-    harvest: "HAPPY_VILLAGER"   # Quand il récolte
-    plant: "VILLAGER_HAPPY"     # Quand il plante
-    deposit: "VILLAGER_HAPPY"   # Quand il transfère au coffre (rayon)
-    level-up: "TOTEM_OF_UNDYING" # Quand il monte de niveau
+    harvest: "HAPPY_VILLAGER"
+    plant: "VILLAGER_HAPPY"
+    deposit: "VILLAGER_HAPPY"
+    level-up: "TOTEM_OF_UNDYING"
+    sell: "WAX_ON"
+    fuel-add: "FLAME"  # Nouvelle particule
 
-  # Types de sons (Noms Bukkit : https://hub.spigotmc.org/javadocs/spigot/org/bukkit/Sound.html)
   audio:
     harvest: "BLOCK_CROP_BREAK"
     till: "ITEM_HOE_TILL"
@@ -73,23 +164,23 @@ visuals:
     retrieve: "ENTITY_ITEM_PICKUP"
     error: "ENTITY_VILLAGER_NO"
     success: "ENTITY_VILLAGER_YES"
+    sell: "ENTITY_EXPERIENCE_ORB_PICKUP"
+    fuel-add: "ITEM_FIRECHARGE_USE" # Nouveau son
 
-# --- MESSAGES DU CHAT ---
 messages:
   prefix: "&8[&6Minion&8]&r "
   no-permission: "&c❌ Tu n'as pas la permission !"
   limit-reached: "&c❌ Tu as atteint ta limite de {limit} minions !"
-
   minion-received: "&a✅ Tu as reçu &e{amount} &aminion(s) fermier(s) !"
   minion-placed: "&a✅ Minion placé avec succès !"
   minion-retrieved: "&a✅ Minion récupéré dans ton inventaire !"
-
   structure-pasting: "&e🏗️ Construction de la ferme en cours..."
   structure-error: "&c❌ Erreur lors de la génération de la structure."
   no-farmland: "&c❌ Aucune terre cultivable trouvée ici."
-
   link-start: "&e⚡ Clique-droit sur un coffre pour le lier (30s) !"
   link-success: "&a✅ Coffre lié avec succès !"
   link-too-far: "&c❌ Ce coffre est trop loin du minion !"
   link-bad-block: "&c❌ Ce n'est pas un coffre valide !"
   link-timeout: "&cTemps écoulé ! Liaison annulée."
+  fuel-added: "&a🔥 Carburant ajouté : &e+{hours}h &7(Total: &b{total}h&7)"
+  no-fuel: "&c⚠ Ce minion n'a plus de carburant ! Il ne travaille plus."

@@ -3,6 +3,7 @@ package fr.lyna.minion.tasks;
 import fr.lyna.minion.MinionPlugin;
 import fr.lyna.minion.entities.FarmerMinion;
 import fr.lyna.minion.managers.MinionItemManager;
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -32,12 +33,15 @@ public class FarmingTask extends BukkitRunnable {
     private Sound cachedSoundHarvest;
     private Sound cachedSoundTill;
     private Sound cachedSoundDeposit;
+    private Sound cachedSoundSell;
 
     private Particle cachedParticleHarvest;
     private Particle cachedParticlePlant;
     private Particle cachedParticleDeposit;
+    private Particle cachedParticleSell;
 
     private final MinionItemManager itemManager;
+    private boolean hasWarnedEconomy = false;
 
     public FarmingTask(MinionPlugin plugin) {
         this.plugin = plugin;
@@ -62,6 +66,8 @@ public class FarmingTask extends BukkitRunnable {
         this.cachedSoundTill = getSoundSafe(plugin.getConfig().getString("visuals.audio.till", "ITEM_HOE_TILL"));
         this.cachedSoundDeposit = getSoundSafe(
                 plugin.getConfig().getString("visuals.audio.deposit", "BLOCK_AMETHYST_BLOCK_RESONATE"));
+        this.cachedSoundSell = getSoundSafe(
+                plugin.getConfig().getString("visuals.audio.sell", "ENTITY_EXPERIENCE_ORB_PICKUP"));
 
         this.cachedParticleHarvest = getParticleSafe(
                 plugin.getConfig().getString("visuals.effects.harvest", "HAPPY_VILLAGER"));
@@ -69,6 +75,8 @@ public class FarmingTask extends BukkitRunnable {
                 plugin.getConfig().getString("visuals.effects.plant", "VILLAGER_HAPPY"));
         this.cachedParticleDeposit = getParticleSafe(
                 plugin.getConfig().getString("visuals.effects.deposit", "VILLAGER_HAPPY"));
+        this.cachedParticleSell = getParticleSafe(
+                plugin.getConfig().getString("visuals.effects.sell", "WAX_ON"));
     }
 
     @Override
@@ -80,10 +88,34 @@ public class FarmingTask extends BukkitRunnable {
         }
         currentTick++;
 
+        // 50ms par tick de jeu standard (si le TPS est 20)
+        // On consomme le fuel en temps réel
+        long timeElapsedMillis = 50;
+
         long startTime = System.nanoTime();
         long maxTimeNs = 25_000_000;
 
         for (FarmerMinion minion : cachedMinionList) {
+            // Consommation Fuel
+            if (minion.hasFuel()) {
+                minion.consumeFuel(timeElapsedMillis);
+                // Mise à jour leaderboard toutes les 30s pour le timer fuel
+                if (currentTick % 600 == 0)
+                    minion.updateLeaderboardDisplay();
+            } else {
+                // Si pas de fuel, on force l'IDLE et on skip l'IA
+                if (minion.getState() != FarmerMinion.MinionState.IDLE) {
+                    minion.setState(FarmerMinion.MinionState.IDLE);
+                    // Effet visuel "Panne" toutes les 5s
+                    if (currentTick % 100 == 0) {
+                        if (minion.getLocation().getWorld() != null)
+                            minion.getLocation().getWorld().spawnParticle(Particle.SMOKE,
+                                    minion.getLocation().add(0, 2, 0), 5, 0, 0, 0, 0.05);
+                    }
+                }
+                continue;
+            }
+
             if (minion.getVillager() == null || minion.getVillager().isDead()) {
                 if (currentTick % 40 == 0)
                     minion.relinkOrSpawn();
@@ -156,7 +188,8 @@ public class FarmingTask extends BukkitRunnable {
     }
 
     private void processMinionAI(FarmerMinion minion) {
-        tryCompacting(minion);
+        boolean hasCompacted = tryCompacting(minion);
+        tryAutoSell(minion, hasCompacted);
 
         if (isInventoryFull(minion)) {
             if (minion.getLinkedChest() != null) {
@@ -176,7 +209,85 @@ public class FarmingTask extends BukkitRunnable {
         }
     }
 
-    private void tryCompacting(FarmerMinion minion) {
+    private void tryAutoSell(FarmerMinion minion, boolean hasCompactor) {
+        int sellPercentage = minion.getAutoSellPercentage();
+        if (sellPercentage <= 0)
+            return;
+
+        Economy econ = plugin.getEconomy();
+
+        if (econ == null) {
+            if (plugin.setupEconomy()) {
+                econ = plugin.getEconomy();
+                if (hasWarnedEconomy) {
+                    plugin.getLogger().info("✅ Économie détectée tardivement ! La revente fonctionne maintenant.");
+                    hasWarnedEconomy = false;
+                }
+            } else {
+                if (!hasWarnedEconomy) {
+                    plugin.getLogger().severe("❌ Les minions essaient de vendre mais l'économie est introuvable.");
+                    hasWarnedEconomy = true;
+                }
+                return;
+            }
+        }
+
+        double totalEarned = 0;
+        Inventory inv = minion.getInventory();
+        Map<Material, Double> prices = getSellPrices();
+        Map<Material, Material> compactRecipes = getCompactRecipes();
+
+        boolean soldSomething = false;
+
+        for (int i = 0; i < inv.getSize(); i++) {
+            ItemStack item = inv.getItem(i);
+            if (item == null || item.getType() == Material.AIR)
+                continue;
+            if (isSeedOrSapling(item.getType()))
+                continue;
+            if (hasCompactor && compactRecipes.containsKey(item.getType()))
+                continue;
+            if (!prices.containsKey(item.getType()))
+                continue;
+
+            double unitPrice = prices.get(item.getType());
+            double finalPrice = unitPrice * item.getAmount() * (sellPercentage / 100.0);
+
+            totalEarned += finalPrice;
+            inv.setItem(i, null);
+            soldSomething = true;
+        }
+
+        if (soldSomething && totalEarned > 0) {
+            econ.depositPlayer(minion.getOwner(), totalEarned);
+            minion.addMoneyEarned(totalEarned);
+            playEffect(minion.getLocation().add(0, 1.5, 0), cachedParticleSell, cachedSoundSell);
+        }
+    }
+
+    private Map<Material, Double> getSellPrices() {
+        Map<Material, Double> prices = new HashMap<>();
+        org.bukkit.configuration.ConfigurationSection sec = plugin.getConfig()
+                .getConfigurationSection("auto-sell.prices");
+        if (sec != null) {
+            for (String key : sec.getKeys(false)) {
+                try {
+                    prices.put(Material.valueOf(key), sec.getDouble(key));
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        return prices;
+    }
+
+    private boolean isSeedOrSapling(Material mat) {
+        return mat.name().endsWith("_SEEDS")
+                || mat.name().contains("SAPLING")
+                || mat == Material.COCOA_BEANS
+                || mat == Material.NETHER_WART;
+    }
+
+    private boolean tryCompacting(FarmerMinion minion) {
         boolean hasCompactor = false;
         for (ItemStack item : minion.getUpgrades().getContents()) {
             if (itemManager.isCompactor(item)) {
@@ -185,11 +296,11 @@ public class FarmingTask extends BukkitRunnable {
             }
         }
         if (!hasCompactor)
-            return;
+            return false;
 
         Inventory inv = minion.getInventory();
         Map<Material, Material> recipes = getCompactRecipes();
-        boolean hasCleanedSpace = false;
+        boolean performedCompact = false;
 
         for (int i = 0; i < inv.getSize(); i++) {
             ItemStack item = inv.getItem(i);
@@ -205,35 +316,23 @@ public class FarmingTask extends BukkitRunnable {
                     int remainder = amount % 9;
 
                     inv.setItem(i, null);
-
                     ItemStack resultBlock = new ItemStack(blockType, blocksToCreate);
                     HashMap<Integer, ItemStack> leftovers = inv.addItem(resultBlock);
 
                     if (leftovers.isEmpty()) {
                         if (remainder > 0) {
                             ItemStack remainderStack = new ItemStack(item.getType(), remainder);
-                            HashMap<Integer, ItemStack> remLeft = inv.addItem(remainderStack);
-                            if (!remLeft.isEmpty()) {
-                            }
+                            inv.addItem(remainderStack);
                         }
+                        performedCompact = true;
                     } else {
                         item.setAmount(amount);
                         inv.setItem(i, item);
-
-                        int addedAmount = blocksToCreate - leftovers.get(0).getAmount();
-                        if (addedAmount > 0) {
-                            inv.removeItem(new ItemStack(blockType, addedAmount));
-                        }
-
-                        if (!hasCleanedSpace && minion.getLinkedChest() != null) {
-                            depositNonCompactables(minion, recipes.keySet());
-                            hasCleanedSpace = true;
-                            i--;
-                        }
                     }
                 }
             }
         }
+        return hasCompactor;
     }
 
     private void depositNonCompactables(FarmerMinion minion, Set<Material> compactableMaterials) {
@@ -248,11 +347,9 @@ public class FarmingTask extends BukkitRunnable {
         Location chestLoc = minion.getLinkedChest();
         if (chestLoc == null)
             return;
-
         Chunk chestChunk = chestLoc.getChunk();
         if (!chestChunk.isLoaded())
             return;
-
         Block chestBlock = chestLoc.getBlock();
         if (!(chestBlock.getState() instanceof Container container))
             return;
@@ -263,10 +360,8 @@ public class FarmingTask extends BukkitRunnable {
 
         for (int i = 0; i < minionInv.getSize(); i++) {
             ItemStack item = minionInv.getItem(i);
-
             if (item != null && item.getType() != Material.AIR && isFarmingItem(item.getType()) && filter.test(item)) {
                 HashMap<Integer, ItemStack> leftover = chestInv.addItem(item);
-
                 if (leftover.isEmpty()) {
                     minionInv.setItem(i, null);
                     transferred = true;
@@ -319,14 +414,12 @@ public class FarmingTask extends BukkitRunnable {
     private void handleIdleState(FarmerMinion minion) {
         if (!minion.canPerformAction())
             return;
-
         Block dirtToTill = findNearestDirt(minion);
         if (dirtToTill != null) {
             minion.setState(FarmerMinion.MinionState.MOVING_TO_PLANT);
             minion.setTargetLocation(dirtToTill.getLocation());
             return;
         }
-
         if (hasAppropriateInfiniteSeeds(minion)) {
             Block emptyFarmland = findNearestEmptyFarmland(minion);
             if (emptyFarmland != null) {
@@ -335,14 +428,12 @@ public class FarmingTask extends BukkitRunnable {
                 return;
             }
         }
-
         Block matureCrop = findNearestMatureCrop(minion);
         if (matureCrop != null) {
             minion.setState(FarmerMinion.MinionState.MOVING_TO_CROP);
             minion.setTargetLocation(matureCrop.getLocation());
             return;
         }
-
         if (Math.random() < 0.05) {
             Location loc = minion.getLocation();
             loc.setYaw(loc.getYaw() + (float) (Math.random() * 60 - 30));
@@ -356,9 +447,7 @@ public class FarmingTask extends BukkitRunnable {
             resetToIdle(minion);
             return;
         }
-
         Location dest = target.clone().add(0.5, 0.1, 0.5);
-
         if (minion.getLocation().distanceSquared(dest) < 1.0) {
             stopMoving(minion);
             minion.setState(FarmerMinion.MinionState.HARVESTING);
@@ -381,37 +470,26 @@ public class FarmingTask extends BukkitRunnable {
         }
 
         Collection<ItemStack> drops = block.getDrops(minion.getTools().get(0));
-
         double multiplierChance = plugin.getLevelManager().getHarvestMultiplierChance(minion.getLevel());
         int levelGuaranteed = 1 + (int) (multiplierChance / 100);
         double remaining = multiplierChance % 100;
-
         int potionMultiplier = minion.getActiveHarvestMultiplier();
         boolean hasVoid = minion.hasVoidModule();
 
         List<ItemStack> finalDrops = new ArrayList<>();
 
         for (ItemStack d : drops) {
-            // Logique Void
             if (hasVoid && minion.isVoidItem(d.getType())) {
                 playVoidEffect(minion);
-
-                // On enregistre quand même la stat "virtuelle" de ce qui a été cassé
                 int rawAmount = d.getAmount() * levelGuaranteed * potionMultiplier;
-                // ✅ MISE A JOUR STATS DÉTAILLÉES
                 minion.addHarvestStat(d.getType(), rawAmount);
                 continue;
             }
-
             int amount = d.getAmount() * levelGuaranteed;
             if (Math.random() * 100 < remaining)
                 amount += d.getAmount();
-
             amount *= potionMultiplier;
-
-            // ✅ MISE A JOUR STATS DÉTAILLÉES
             minion.addHarvestStat(d.getType(), amount);
-
             ItemStack n = d.clone();
             n.setAmount(amount);
             finalDrops.add(n);
@@ -419,7 +497,6 @@ public class FarmingTask extends BukkitRunnable {
 
         Inventory fakeInv = Bukkit.createInventory(null, minion.getInventory().getSize());
         fakeInv.setContents(minion.getInventory().getContents());
-
         boolean canFitAll = true;
         for (ItemStack drop : finalDrops) {
             HashMap<Integer, ItemStack> left = fakeInv.addItem(drop);
@@ -429,9 +506,8 @@ public class FarmingTask extends BukkitRunnable {
             }
         }
 
-        if (!canFitAll) {
+        if (!canFitAll)
             return;
-        }
 
         block.setType(Material.AIR);
         for (ItemStack drop : finalDrops) {

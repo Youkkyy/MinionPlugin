@@ -10,6 +10,8 @@ import fr.lyna.minion.managers.DataManager;
 import fr.lyna.minion.managers.LevelManager;
 import fr.lyna.minion.managers.MinionManager;
 import fr.lyna.minion.tasks.FarmingTask;
+import net.milkbowl.vault.economy.Economy;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class MinionPlugin extends JavaPlugin {
@@ -19,12 +21,21 @@ public class MinionPlugin extends JavaPlugin {
     private DataManager dataManager;
     private LevelManager levelManager;
     private FarmingTask farmingTask;
+    private Economy economy;
 
     @Override
     public void onEnable() {
         instance = this;
         saveDefaultConfig();
         setupFiles();
+
+        // ✅ MODIFICATION : On tente de charger l'économie, mais on ne coupe pas le
+        // plugin si ça échoue.
+        // C'est FarmingTask qui réessaiera plus tard.
+        if (!setupEconomy()) {
+            getLogger()
+                    .warning("⚠️ Économie introuvable au démarrage. Le plugin va réessayer de se connecter plus tard.");
+        }
 
         this.levelManager = new LevelManager(this);
         this.minionManager = new MinionManager(this);
@@ -59,6 +70,25 @@ public class MinionPlugin extends JavaPlugin {
         getLogger().info("❌ MinionPlugin désactivé");
     }
 
+    // ✅ Rendue publique pour être appelée depuis FarmingTask
+    public boolean setupEconomy() {
+        if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            return false;
+        }
+
+        RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
+        if (rsp == null) {
+            return false;
+        }
+
+        economy = rsp.getProvider();
+        if (economy != null) {
+            getLogger().info("✅ Économie connectée avec succès : " + economy.getName());
+            return true;
+        }
+        return false;
+    }
+
     private void setupFiles() {
         java.io.File schematicFolder = new java.io.File(getDataFolder(), "schematics");
         if (!schematicFolder.exists())
@@ -83,7 +113,6 @@ public class MinionPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(minionManager, this);
         getServer().getPluginManager().registerEvents(new MinionPlaceListener(this), this);
         getServer().getPluginManager().registerEvents(new MinionDamageListener(this), this);
-        // ✅ Enregistrement du listener leaderboard
         getServer().getPluginManager().registerEvents(new LeaderboardListener(this), this);
     }
 
@@ -101,6 +130,10 @@ public class MinionPlugin extends JavaPlugin {
 
     public LevelManager getLevelManager() {
         return levelManager;
+    }
+
+    public Economy getEconomy() {
+        return economy;
     }
 
     public String getMessage(String path) {

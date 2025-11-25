@@ -84,11 +84,13 @@ public class DataManager {
         minion.setExperience(dataConfig.getLong(path + ".experience", 0));
         minion.setPrestige(dataConfig.getInt(path + ".prestige", 0));
 
-        // ✅ CHARGEMENT DATE CRÉATION
         long savedCreation = dataConfig.getLong(path + ".creation-time", 0);
         if (savedCreation > 0) {
             minion.setCreationTime(savedCreation);
         }
+
+        minion.setTotalMoneyEarned(dataConfig.getDouble(path + ".total-money-earned", 0.0));
+        minion.setFuelTimeRemaining(dataConfig.getLong(path + ".fuel", 0)); // ✅ Chargement Fuel
 
         String lbUuid = dataConfig.getString(path + ".leaderboard-uuid");
         if (lbUuid != null) {
@@ -172,9 +174,9 @@ public class DataManager {
         dataConfig.set(path + ".level", minion.getLevel());
         dataConfig.set(path + ".experience", minion.getExperience());
         dataConfig.set(path + ".prestige", minion.getPrestige());
-
-        // ✅ SAUVEGARDE DE LA DATE
         dataConfig.set(path + ".creation-time", minion.getCreationTime());
+        dataConfig.set(path + ".total-money-earned", minion.getTotalMoneyEarned());
+        dataConfig.set(path + ".fuel", minion.getFuelTimeRemaining()); // ✅ Sauvegarde Fuel
 
         if (minion.getLeaderboardUuid() != null) {
             dataConfig.set(path + ".leaderboard-uuid", minion.getLeaderboardUuid().toString());

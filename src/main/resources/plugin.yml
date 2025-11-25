@@ -4,8 +4,8 @@ main: fr.lyna.minion.MinionPlugin
 api-version: '1.21'
 author: Lyna
 description: Plugin de minions fermiers avec système de progression et niveaux
-depend: [FastAsyncWorldEdit]
-softdepend: [WorldEdit]
+depend: [FastAsyncWorldEdit, Vault]
+softdepend: [WorldEdit, Essentials] # ✅ AJOUT ICI : Force Essentials à charger avant
 
 commands:
   minion:

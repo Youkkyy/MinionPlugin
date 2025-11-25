@@ -42,13 +42,16 @@ public class FarmerMinion {
     private long experience;
     private int prestige;
 
-    // ✅ STATS AVANCÉES
+    // STATS
     private final Map<Material, Long> harvestStats;
-    private long creationTime; // ❌ Plus 'final' pour permettre le chargement
+    private long creationTime;
+    private double totalMoneyEarned;
     private UUID leaderboardUuid;
 
-    private final List<Map.Entry<Long, Integer>> harvestHistory;
+    // CARBURANT (en millisecondes)
+    private long fuelTimeRemaining;
 
+    private final List<Map.Entry<Long, Integer>> harvestHistory;
     private final Set<Material> infiniteSeeds;
     private final Set<Material> selectedSeeds;
     private final Set<Material> voidFilter;
@@ -76,11 +79,12 @@ public class FarmerMinion {
         this.experience = 0;
         this.prestige = 0;
 
-        // Init Stats
         this.harvestStats = new HashMap<>();
         this.harvestHistory = new ArrayList<>();
-        this.creationTime = System.currentTimeMillis(); // Par défaut "maintenant", sera écrasé par le DataManager
+        this.creationTime = System.currentTimeMillis();
+        this.totalMoneyEarned = 0.0;
         this.leaderboardUuid = null;
+        this.fuelTimeRemaining = 0; // Par défaut 0
 
         this.infiniteSeeds = new HashSet<>();
         this.selectedSeeds = new HashSet<>();
@@ -96,7 +100,43 @@ public class FarmerMinion {
         updateInfiniteSeeds();
     }
 
-    // --- GESTION STATS & LEADERBOARD ---
+    // --- GESTION CARBURANT ---
+    public boolean hasFuel() {
+        if (!plugin.getConfig().getBoolean("fuel.enabled", true))
+            return true;
+        return fuelTimeRemaining > 0;
+    }
+
+    public void addFuel(long millis) {
+        this.fuelTimeRemaining += millis;
+        updateLeaderboardDisplay(); // Mise à jour immédiate
+    }
+
+    public void consumeFuel(long millis) {
+        if (!plugin.getConfig().getBoolean("fuel.enabled", true))
+            return;
+        this.fuelTimeRemaining -= millis;
+        if (this.fuelTimeRemaining < 0)
+            this.fuelTimeRemaining = 0;
+    }
+
+    public long getFuelTimeRemaining() {
+        return fuelTimeRemaining;
+    }
+
+    public void setFuelTimeRemaining(long millis) {
+        this.fuelTimeRemaining = millis;
+    }
+
+    public String getFormattedFuelTime() {
+        if (fuelTimeRemaining <= 0)
+            return "§cÉpuisé";
+        long seconds = fuelTimeRemaining / 1000;
+        long hours = seconds / 3600;
+        long minutes = (seconds % 3600) / 60;
+        return String.format("%dh %02dm", hours, minutes);
+    }
+    // -------------------------
 
     public void addHarvestStat(Material material, int amount) {
         if (amount <= 0)
@@ -106,6 +146,21 @@ public class FarmerMinion {
             harvestHistory.add(new AbstractMap.SimpleEntry<>(System.currentTimeMillis(), amount));
         }
         updateLeaderboardDisplay();
+    }
+
+    public void addMoneyEarned(double amount) {
+        if (amount <= 0)
+            return;
+        this.totalMoneyEarned += amount;
+        updateLeaderboardDisplay();
+    }
+
+    public double getTotalMoneyEarned() {
+        return totalMoneyEarned;
+    }
+
+    public void setTotalMoneyEarned(double amount) {
+        this.totalMoneyEarned = amount;
     }
 
     public Map<Material, Long> getHarvestStats() {
@@ -125,15 +180,13 @@ public class FarmerMinion {
         return creationTime;
     }
 
-    // ✅ Setter ajouté pour restaurer la vraie date
     public void setCreationTime(long creationTime) {
         this.creationTime = creationTime;
     }
 
     public void setLeaderboardUuid(UUID uuid) {
-        if (this.leaderboardUuid != null && !this.leaderboardUuid.equals(uuid)) {
+        if (this.leaderboardUuid != null && !this.leaderboardUuid.equals(uuid))
             removeLeaderboard();
-        }
         this.leaderboardUuid = uuid;
         updateLeaderboardDisplay();
     }
@@ -147,9 +200,8 @@ public class FarmerMinion {
             Entity entity = Bukkit.getEntity(leaderboardUuid);
             if (entity != null) {
                 entity.remove();
-                if (entity.getLocation().getWorld() != null) {
+                if (entity.getLocation().getWorld() != null)
                     entity.getLocation().getWorld().playSound(entity.getLocation(), Sound.ENTITY_ITEM_BREAK, 1f, 1f);
-                }
             }
             leaderboardUuid = null;
         }
@@ -158,7 +210,6 @@ public class FarmerMinion {
     private int getRealTimeHourlyRate() {
         long now = System.currentTimeMillis();
         int countLastMinute = 0;
-
         synchronized (harvestHistory) {
             harvestHistory.removeIf(entry -> (now - entry.getKey()) > 60000);
             for (Map.Entry<Long, Integer> entry : harvestHistory) {
@@ -171,15 +222,13 @@ public class FarmerMinion {
     public void updateLeaderboardDisplay() {
         if (leaderboardUuid == null)
             return;
-
-        // Astuce : On tente de charger le chunk si on doit mettre à jour l'affichage
-        // Mais seulement si le minion est actif (chunk chargé)
         if (!spawnLocation.getChunk().isLoaded())
             return;
 
         Entity entity = Bukkit.getEntity(leaderboardUuid);
         if (entity instanceof TextDisplay display) {
             DecimalFormat df = new DecimalFormat("#,###");
+            DecimalFormat moneyDf = new DecimalFormat("#,##0.00");
             SimpleDateFormat dateFmt = new SimpleDateFormat("dd/MM/yyyy HH:mm");
 
             List<String> activeModules = getActiveModuleNames();
@@ -199,15 +248,24 @@ public class FarmerMinion {
                         });
             }
 
+            // Couleur du fuel : Vert si > 1h, Rouge si < 1h
+            String fuelColor = (fuelTimeRemaining > 3600000) ? "§a" : "§c";
+            if (!plugin.getConfig().getBoolean("fuel.enabled", true))
+                fuelColor = "§7(Désactivé)";
+
             String text = String.join("\n",
                     "§6§l⭐ STATISTIQUES MINION FERMIER ⭐",
                     "",
                     "§7Propriétaire: §e" + Bukkit.getOfflinePlayer(ownerUUID).getName(),
                     "§7Posé le: §b" + dateFmt.format(new Date(creationTime)),
                     "",
+                    "§e§lÉTAT",
+                    "§7Carburant: " + fuelColor + getFormattedFuelTime(),
+                    "§7Vitesse: §a" + df.format(getRealTimeHourlyRate()) + " items/h",
+                    "",
                     "§e§lPERFORMANCE",
-                    "§7Vitesse Temps Réel: §a" + df.format(getRealTimeHourlyRate()) + " items/h",
                     "§7Total Récolté: §6" + df.format(getTotalHarvested()),
+                    "§7Total Vendu: §a" + moneyDf.format(totalMoneyEarned) + " $",
                     "",
                     "§e§lDÉTAIL RÉCOLTES",
                     cropDetails.toString(),
@@ -232,6 +290,10 @@ public class FarmerMinion {
         if (hasCompactor)
             names.add("§bCompacteur");
 
+        int autoSellPct = getAutoSellPercentage();
+        if (autoSellPct > 0)
+            names.add("§aVente " + autoSellPct + "%");
+
         int xpMult = getActiveXPMultiplier();
         if (xpMult > 1)
             names.add("§dXP x" + xpMult);
@@ -248,14 +310,11 @@ public class FarmerMinion {
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
     }
 
-    // --- FIN GESTION STATS ---
-
     public boolean hasVoidModule() {
         MinionItemManager itemManager = new MinionItemManager(plugin);
         for (ItemStack item : upgrades.getContents()) {
-            if (item != null && itemManager.isVoidModule(item)) {
+            if (item != null && itemManager.isVoidModule(item))
                 return true;
-            }
         }
         return false;
     }
@@ -265,11 +324,10 @@ public class FarmerMinion {
     }
 
     public void toggleVoidItem(Material material) {
-        if (voidFilter.contains(material)) {
+        if (voidFilter.contains(material))
             voidFilter.remove(material);
-        } else {
+        else
             voidFilter.add(material);
-        }
     }
 
     public Set<Material> getVoidFilter() {
@@ -279,6 +337,20 @@ public class FarmerMinion {
     public void setVoidFilter(Set<Material> filter) {
         this.voidFilter.clear();
         this.voidFilter.addAll(filter);
+    }
+
+    public int getAutoSellPercentage() {
+        int maxPercentage = 0;
+        MinionItemManager itemManager = new MinionItemManager(plugin);
+        for (ItemStack item : upgrades.getContents()) {
+            if (item != null && itemManager.isAutoSellModule(item)) {
+                int tier = itemManager.getAutoSellTier(item);
+                int pct = plugin.getConfig().getInt("auto-sell.tiers." + tier, 0);
+                if (pct > maxPercentage)
+                    maxPercentage = pct;
+            }
+        }
+        return maxPercentage;
     }
 
     public int getActiveXPMultiplier() {
@@ -314,11 +386,13 @@ public class FarmerMinion {
                         "§7Niveau: §e" + level,
                         "§7Prestige: §6" + prestige,
                         "§7XP: §a" + experience,
+                        "§7Ventes: §a" + String.format("%.2f", totalMoneyEarned) + " $",
+                        "§7Carburant: §b" + getFormattedFuelTime(),
                         "",
                         "§7Place ce minion pour qu'il",
                         "§7continue son travail !",
                         "",
-                        "§8(Toute la progression est conservée)");
+                        "§8(Progression sauvegardée)");
 
         ItemStack item = builder.build();
         ItemMeta meta = item.getItemMeta();
@@ -327,8 +401,10 @@ public class FarmerMinion {
         data.set(new NamespacedKey(plugin, "saved_level"), PersistentDataType.INTEGER, level);
         data.set(new NamespacedKey(plugin, "saved_xp"), PersistentDataType.LONG, experience);
         data.set(new NamespacedKey(plugin, "saved_prestige"), PersistentDataType.INTEGER, prestige);
-
         data.set(new NamespacedKey(plugin, "saved_creation_time"), PersistentDataType.LONG, creationTime);
+        data.set(new NamespacedKey(plugin, "saved_money_earned"), PersistentDataType.DOUBLE, totalMoneyEarned);
+        // Sauvegarde du fuel
+        data.set(new NamespacedKey(plugin, "saved_fuel"), PersistentDataType.LONG, fuelTimeRemaining);
 
         if (!harvestStats.isEmpty()) {
             String statsStr = harvestStats.entrySet().stream()
@@ -461,26 +537,15 @@ public class FarmerMinion {
         spawn();
     }
 
-    /**
-     * ✅ Méthode appelée lors de la suppression définitive par le joueur
-     * (Récupération)
-     * Supprime le minion ET le leaderboard.
-     */
     public void remove() {
         if (villager != null && !villager.isDead())
             villager.remove();
         removeLeaderboard();
     }
 
-    /**
-     * ✅ NOUVEAU: Méthode appelée lors de l'arrêt du serveur (Reload/Restart)
-     * Supprime UNIQUEMENT le minion physique (Villager) pour éviter les glitchs,
-     * MAIS GARDE le Leaderboard (TextDisplay) qui est persistant.
-     */
     public void despawn() {
         if (villager != null && !villager.isDead())
             villager.remove();
-        // On ne touche PAS au leaderboard ici !
     }
 
     public String getDisplayName() {
@@ -492,10 +557,8 @@ public class FarmerMinion {
             for (int i = 0; i < prestige; i++)
                 stars.append(symbol);
         }
-        return format.replace("{stars}", stars.toString())
-                .replace("{prestige}", prestige > 0 ? "" : "")
-                .replace("{level}", String.valueOf(level))
-                .replace("&", "§");
+        return format.replace("{stars}", stars.toString()).replace("{prestige}", prestige > 0 ? "" : "")
+                .replace("{level}", String.valueOf(level)).replace("&", "§");
     }
 
     public void updateNameTag() {

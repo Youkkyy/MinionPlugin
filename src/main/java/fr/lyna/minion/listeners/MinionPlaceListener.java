@@ -108,6 +108,7 @@ public class MinionPlaceListener implements Listener {
         NamespacedKey xpKey = new NamespacedKey(plugin, "saved_xp");
         NamespacedKey presKey = new NamespacedKey(plugin, "saved_prestige");
         NamespacedKey seedsKey = new NamespacedKey(plugin, "saved_seeds");
+        NamespacedKey moneyKey = new NamespacedKey(plugin, "saved_money_earned"); // 💰 Clé argent
 
         boolean restored = false;
 
@@ -115,11 +116,13 @@ public class MinionPlaceListener implements Listener {
             int level = data.get(lvlKey, PersistentDataType.INTEGER);
             long xp = data.getOrDefault(xpKey, PersistentDataType.LONG, 0L);
             int prestige = data.getOrDefault(presKey, PersistentDataType.INTEGER, 0);
+            double money = data.getOrDefault(moneyKey, PersistentDataType.DOUBLE, 0.0); // 💰 Récupération argent
 
             // Application des stats
             minion.setLevel(level);
             minion.setExperience(xp);
             minion.setPrestige(prestige);
+            minion.setTotalMoneyEarned(money); // 💰 Application
 
             // Restauration des graines sélectionnées
             if (data.has(seedsKey, PersistentDataType.STRING)) {
@@ -167,12 +170,10 @@ public class MinionPlaceListener implements Listener {
         if (!item.hasItemMeta())
             return false;
 
-        // ✅ FIX 1.21 : Utilisation de displayName() (Component) et Serializer
         Component displayName = item.getItemMeta().displayName();
         if (displayName == null)
             return false;
 
-        // On convertit le nom en texte brut pour vérifier le contenu
         String plainName = PlainTextComponentSerializer.plainText().serialize(displayName);
         return plainName.contains("Minion Fermier");
     }

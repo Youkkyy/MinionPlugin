@@ -110,6 +110,14 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
             item = itemManager.getCompactor();
         } else if (itemType.equals("void")) {
             item = itemManager.getVoidModule();
+        } else if (itemType.startsWith("autosell")) {
+            try {
+                int tier = Integer.parseInt(itemType.substring(8));
+                item = itemManager.getAutoSellModule(tier);
+            } catch (NumberFormatException e) {
+                sender.sendMessage(plugin.colorize("&cUtilise autosell1, autosell2, autosell3"));
+                return;
+            }
         } else if (itemType.startsWith("xp")) {
             try {
                 int tier = Integer.parseInt(itemType.substring(2));
@@ -126,13 +134,22 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(plugin.colorize("&cUtilise harvest1, harvest2... harvest6"));
                 return;
             }
+        } else if (itemType.startsWith("fuel")) {
+            try {
+                int tier = Integer.parseInt(itemType.substring(4));
+                item = itemManager.getFuelItem(tier);
+            } catch (NumberFormatException e) {
+                sender.sendMessage(plugin.colorize("&cUtilise fuel1, fuel2... fuel6"));
+                return;
+            }
         }
 
         if (item != null) {
             target.getInventory().addItem(item);
             sender.sendMessage(plugin.colorize("&aItem spécial donné à " + target.getName()));
         } else {
-            sender.sendMessage(plugin.colorize("&cItem inconnu. Dispo: compactor, void, xp1-6, harvest1-6"));
+            sender.sendMessage(
+                    plugin.colorize("&cItem inconnu. Dispo: compactor, void, autosell1-3, xp1-6, harvest1-6, fuel1-6"));
         }
     }
 
@@ -360,16 +377,12 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
     }
 
     private FarmerMinion getTargetMinion(Player player) {
-        // ✅ FIX: Utilisation de RayTrace qui filtre spécifiquement les Villagers
-        // Cela permet d'ignorer les TextDisplays (Panneaux de stats) qui bloquent la
-        // vue
         RayTraceResult result = player.getWorld().rayTraceEntities(
                 player.getEyeLocation(),
                 player.getEyeLocation().getDirection(),
                 10,
-                0.5, // Rayon de détection légèrement large
-                entity -> entity instanceof Villager // On ignore tout ce qui n'est pas un villageois
-        );
+                0.5,
+                entity -> entity instanceof Villager);
 
         if (result != null && result.getHitEntity() instanceof Villager villager) {
             NamespacedKey key = new NamespacedKey(plugin, "minion_uuid");
@@ -429,7 +442,7 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
                 completions.add("add");
                 completions.add("set");
             } else if (args[0].equalsIgnoreCase("giveitem") && sender.hasPermission("minion.admin")) {
-                return null; // Liste des joueurs
+                return null;
             }
         } else if (args.length == 3) {
             if (args[0].equalsIgnoreCase("level") && sender.hasPermission("minion.admin")) {
@@ -437,10 +450,15 @@ public class MinionCommand implements CommandExecutor, TabCompleter {
             } else if (args[0].equalsIgnoreCase("giveitem") && sender.hasPermission("minion.admin")) {
                 completions.add("compactor");
                 completions.add("void");
+                completions.add("autosell1");
+                completions.add("autosell2");
+                completions.add("autosell3");
                 for (int i = 1; i <= 6; i++)
                     completions.add("xp" + i);
                 for (int i = 1; i <= 6; i++)
                     completions.add("harvest" + i);
+                for (int i = 1; i <= 6; i++)
+                    completions.add("fuel" + i);
             }
         }
 

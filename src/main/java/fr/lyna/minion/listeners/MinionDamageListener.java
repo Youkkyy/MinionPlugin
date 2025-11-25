@@ -62,9 +62,8 @@ public class MinionDamageListener implements Listener {
     }
 
     private void resetHealth(Villager villager) {
-        // ✅ FIX 1.21.3+ : GENERIC_MAX_HEALTH devient MAX_HEALTH
-        // On utilise explicitement AttributeInstance pour éviter l'erreur "undefined
-        // for type Object"
+        // ✅ FIX 1.21.8 : Utilisation de MAX_HEALTH (remplace GENERIC_MAX_HEALTH depuis
+        // 1.21.2)
         AttributeInstance attribute = villager.getAttribute(Attribute.MAX_HEALTH);
         if (attribute != null) {
             villager.setHealth(attribute.getValue());
